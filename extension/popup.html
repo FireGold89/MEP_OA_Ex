@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="UTF-8">
+    <title>OA 自動填寫</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <h1>採購立項自動化</h1>
+            <div class="tabs">
+                <button id="tab-fill" class="tab-btn active">填充數據</button>
+                <button id="tab-manage" class="tab-btn">管理項目</button>
+            </div>
+        </header>
+
+        <div id="view-fill" class="view">
+            <div class="action-bar" style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <button id="btn-undo" class="secondary-btn" style="flex: 1;" title="恢復到填充前的狀態">↩️ 恢復上一步</button>
+                <button id="btn-clear" class="secondary-btn" style="flex: 1;" title="清空所有自動填充欄位">🧹 取消填充</button>
+            </div>
+            <p class="hint">請選擇供應商以開始填充：</p>
+            <div id="vendor-list" class="vendor-list">
+                <!-- 由 JS 動態生成 -->
+            </div>
+        </div>
+
+        <!-- 管理頁面 -->
+        <div id="view-manage" class="view hidden">
+            <div class="form-container">
+                <h3 id="form-title">新增項目</h3>
+                <input type="hidden" id="edit-id">
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>項目標題 (顯示用)</label>
+                        <input type="text" id="input-label" placeholder="例如: 信成 - 電器材料">
+                    </div>
+                    <div class="input-group">
+                        <label>物業名稱</label>
+                        <input type="text" id="input-propertyName" placeholder="例如: 九龍灣車廠">
+                    </div>
+                </div>
+
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>美博報價編號</label>
+                        <input type="text" id="input-reportNo" placeholder="例如: MS/Q1241/24/kp">
+                    </div>
+                    <div class="input-group">
+                        <label>項目經理</label>
+                        <div class="oa-style-input">
+                            <input type="text" id="input-manager" placeholder="請點擊右側放大鏡選取">
+                            <input type="hidden" id="input-manager-id">
+                            <button id="btn-oa-manager-pick" class="oa-picker-btn" title="從 OA 網頁選取人員">🔍</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>項目內容 (大文字框)</label>
+                    <textarea id="input-projectContent" rows="3" placeholder="例如: 電器材料及配件報價"></textarea>
+                </div>
+
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>合約總價</label>
+                        <input type="text" id="input-total" placeholder="12152.60">
+                    </div>
+                    <div class="input-group">
+                        <label>報價形式</label>
+                        <select id="input-quoteType">
+                            <option value="">-- 請選擇 --</option>
+                            <option value="報價邀請">報價邀請</option>
+                            <option value="招標">招標</option>
+                            <option value="特殊情況 (緊急)">特殊情況 (緊急)</option>
+                            <option value="續約">續約</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>採購類別</label>
+                        <select id="input-buyType">
+                            <option value="">-- 請選擇 --</option>
+                            <option value="保養維修材料">保養維修材料</option>
+                            <option value="保養合約分判">保養合約分判</option>
+                            <option value="工程材料">工程材料</option>
+                            <option value="分判工程">分判工程</option>
+                            <option value="後加工程">後加工程</option>
+                            <option value="固定資產">固定資產</option>
+                            <option value="其他">其他</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>立項預算金額</label>
+                        <input type="text" id="input-budget" placeholder="12152.60">
+                    </div>
+                </div>
+
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>幣種</label>
+                        <select id="input-currency">
+                            <option value="HKD">HKD</option>
+                            <option value="RMB">RMB</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>承判商 (必須輸入公司全名)</label>
+                    <input type="text" id="input-vendorName" placeholder="公司全名">
+                </div>
+
+                <div class="input-group">
+                    <label>報價內容</label>
+                    <input type="text" id="input-content" placeholder="採購/報價內容">
+                </div>
+
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>金額</label>
+                        <input type="text" id="input-amount" placeholder="單筆金額">
+                    </div>
+                    <div class="input-group">
+                        <label>邀請公司 (間)</label>
+                        <input type="text" id="input-inviteCount" placeholder="例如: 1">
+                    </div>
+                </div>
+
+                <div class="input-grid">
+                    <div class="input-group">
+                        <label>有效報價/回復 (份)</label>
+                        <input type="text" id="input-replyCount" placeholder="例如: 1">
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>選擇中標承判商理由</label>
+                    <textarea id="input-reason" rows="2" placeholder="推薦理由"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button id="btn-save" class="primary-btn">儲存項目</button>
+                    <button id="btn-save-as-new" class="secondary-btn hidden">另存為新項目</button>
+                    <button id="btn-cancel" class="secondary-btn hidden">取消編輯</button>
+                </div>
+                <div class="form-actions border-top">
+                    <button id="btn-export" class="secondary-btn">匯出 CSV</button>
+                    <button id="btn-import-trigger" class="secondary-btn">匯入 CSV</button>
+                    <input type="file" id="input-import" accept=".csv" class="hidden">
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-bar"
+            style="padding: 10px; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #666;">
+            <span>顯示懸浮球</span>
+            <input type="checkbox" id="toggle-float-ball" checked style="width: auto;">
+        </div>
+
+        <footer>
+            <div id="status">準備就緒</div>
+            <div style="font-size: 9px; color: #ccc; margin-top: 5px;">v3.9_Final_Stable</div>
+        </footer>
+    </div>
+    <script src="popup.js"></script>
+</body>
+
+</html>
