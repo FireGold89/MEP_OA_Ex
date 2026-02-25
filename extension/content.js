@@ -277,19 +277,76 @@
         const fileIn = document.getElementById('in-f-file');
         document.getElementById('btn-f-import').onclick = () => fileIn.click();
         fileIn.onchange = (e) => {
-            const reader = new FileReader(); reader.onload = async (ev) => {
-                const lines = ev.target.result.split(/\r?\n/).filter(l => l.trim());
+            if (!e.target.files.length) return;
+            const reader = new FileReader();
+            reader.onload = async (ev) => {
+                const content = ev.target.result;
+                const lines = content.split(/\r?\n/).filter(l => l.trim());
+                if (lines.length < 2) return;
+
                 const grouped = {};
                 lines.slice(1).forEach(l => {
-                    const cols = []; let c = "", q = false;
-                    for (let i = 0; i < l.length; i++) { if (l[i] === '"') q = !q; else if (l[i] === ',' && !q) { cols.push(c); c = ""; } else c += l[i]; } cols.push(c);
-                    const k = cols[0] + "_" + cols[2];
-                    if (!grouped[k]) grouped[k] = { id: "p_" + Date.now() + Math.random(), label: cols[0], propertyName: cols[1], reportNo: cols[2], manager: cols[3], projectContent: cols[4], budget: cols[5], total: cols[6], quoteType: cols[7], buyType: cols[8], currency: cols[9], details: [], inviteCount: cols[14], replyCount: cols[15], reason: cols[16], winnerName: cols[17], contractCurrency: cols[18], contractAmount: cols[19] };
-                    if (cols[10]) grouped[k].details.push({ vendorName: cols[10], content: cols[11], detailCurrency: cols[12], amount: cols[13] });
+                    const cols = [];
+                    let c = "", q = false;
+                    for (let i = 0; i < l.length; i++) {
+                        if (l[i] === '"') q = !q;
+                        else if (l[i] === ',' && !q) { cols.push(c); c = ""; }
+                        else c += l[i];
+                    }
+                    cols.push(c);
+
+                    // 使用 項目標題 + 報價編號 作為 Key 進行分組
+                    const label = (cols[0] || "").trim();
+                    const reportNo = (cols[2] || "").trim();
+                    if (!label && !reportNo) return;
+
+                    const k = label + "_" + reportNo;
+                    if (!grouped[k]) {
+                        grouped[k] = {
+                            id: "p_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+                            label: label,
+                            propertyName: (cols[1] || "").trim(),
+                            reportNo: reportNo,
+                            manager: (cols[3] || "").trim(),
+                            projectContent: (cols[4] || "").trim(),
+                            budget: (cols[5] || "").trim(),
+                            total: (cols[6] || "").trim(),
+                            quoteType: (cols[7] || "").trim(),
+                            buyType: (cols[8] || "").trim(),
+                            currency: (cols[9] || "0").trim(),
+                            details: [],
+                            inviteCount: (cols[14] || "").trim(),
+                            replyCount: (cols[15] || "").trim(),
+                            reason: (cols[16] || "").trim(),
+                            winnerName: (cols[17] || "").trim(),
+                            contractCurrency: (cols[18] || "0").trim(),
+                            contractAmount: (cols[19] || "").trim()
+                        };
+                    }
+
+                    // 添加明細（承判商、內容、幣種、金額）
+                    if (cols[10] || cols[11] || cols[13]) {
+                        grouped[k].details.push({
+                            vendorName: (cols[10] || "").trim(),
+                            content: (cols[11] || "").trim(),
+                            detailCurrency: (cols[12] || "0").trim(),
+                            amount: (cols[13] || "").trim()
+                        });
+                    }
                 });
-                projects = Object.values(grouped); await chrome.storage.local.set({ 'oa_projects_v13': projects }); syncData();
+
+                const imported = Object.values(grouped);
+                if (imported.length > 0) {
+                    projects = imported;
+                    await chrome.storage.local.set({ 'oa_projects_v13': projects });
+                    alert(`✅ 成功匯入 ${imported.length} 個項目`);
+                    syncData();
+                } else {
+                    alert("⚠️ 未發現有效數據");
+                }
             };
             reader.readAsText(e.target.files[0]);
+            fileIn.value = ""; // 重置 input 以便下次選擇同一個文件
         };
     }
 
