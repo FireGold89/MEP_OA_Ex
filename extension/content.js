@@ -1,6 +1,6 @@
 /**
  * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.10.0 - Purchase Category Fix
+ * Version: 4.11.0 - BuyType ID Precision Calibration
  */
 
 (function () {
@@ -11,12 +11,12 @@
     let projects = [];
     const fields = ['label', 'propertyName', 'reportNo', 'manager', 'projectContent', 'budget', 'total', 'quoteType', 'buyType', 'currency', 'inviteCount', 'replyCount', 'reason', 'winnerName', 'contractCurrency', 'contractAmount'];
     
-    // 映射表：將顯示文字轉為 OA 系統預期的索引值 (Value)
+    // 映射表：將顯示文字/舊索引轉為 OA 系統真實的 Value (根據 F12 截圖校準)
     const quoteMap = { "0": "0", "1": "1", "2": "2", "3": "3", "報價邀請": "0", "招標": "1", "特殊情況 (緊急)": "2", "續約": "3" };
     const buyMap = { 
-        "0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6",
-        "保養維修材料": "0", "保養合約分判": "1", "工程材料": "2", 
-        "分判工程": "3", "後加工程": "4", "固定資產": "5", "其他": "6" 
+        "0": "9", "1": "10", "2": "11", "3": "12", "4": "14", "5": "4", "6": "13",
+        "保養維修材料": "9", "保養合約分判": "10", "工程材料": "11", 
+        "分判工程": "12", "後加工程": "14", "固定資產": "4", "其他": "13" 
     };
 
     function init() {
@@ -158,13 +158,13 @@
                         <label>採購類別</label>
                         <select id="in-f-buyType">
                             <option value="">請選擇</option>
-                            <option value="0">保養維修材料</option>
-                            <option value="1">保養合約分判</option>
-                            <option value="2">工程材料</option>
-                            <option value="3">分判工程</option>
-                            <option value="4">後加工程</option>
-                            <option value="5">固定資產</option>
-                            <option value="6">其他</option>
+                            <option value="9">保養維修材料</option>
+                            <option value="10">保養合約分判</option>
+                            <option value="11">工程材料</option>
+                            <option value="12">分判工程</option>
+                            <option value="14">後加工程</option>
+                            <option value="4">固定資產</option>
+                            <option value="13">其他</option>
                         </select>
                     </div>
                     <div class="oa-p-group"><label>立項預算金額</label><input type="text" id="in-f-budget"></div>
@@ -224,7 +224,7 @@
                 <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
             </div>
 
-            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.10.0 (Diagnostics Enhanced)</div>
+            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.0 (Data ID Calibrated)</div>
         `;
         document.body.appendChild(panel);
         bindEvents();

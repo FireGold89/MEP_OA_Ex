@@ -6,7 +6,7 @@
 
 (function () {
     const isTop = (window.self === window.top);
-    console.log(`%cOA Bridge v4.10.0: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
+    console.log(`%cOA Bridge v4.11.0: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
 
     // 全球暫存，供人員選擇器自動匹配
     window.__OA_LAST_PROJECT = window.__OA_LAST_PROJECT || null;

@@ -1,5 +1,5 @@
 /**
- * Version: 4.6.2 (Popup Unified)
+ * Version: 4.11.0 - BuyType ID Precision Calibration
  * 與懸浮面板 100% 統一版本的 popup.js
  */
 
