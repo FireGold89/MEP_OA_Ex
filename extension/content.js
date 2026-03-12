@@ -1,6 +1,6 @@
 /**
  * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.11.2 - Ghost Drag Fix
+ * Version: 4.11.3 - Pointer Capture Drag
  */
 
 (function () {
@@ -224,7 +224,7 @@
                 <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
             </div>
 
-            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.2 (Ghost Drag Fixed)</div>
+            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.3 (Pointer Capture Drag)</div>
         `;
         document.body.appendChild(panel);
         bindEvents();
@@ -238,16 +238,31 @@
         document.body.appendChild(ball);
 
         const main = ball.querySelector('.oa-ball-main');
-        // 使用模組作用域的拖拽狀態，避免多個事件實例衝突
-        let isPointerDown = false;
         let isDragging = false;
         let startX = 0, startY = 0, initialX = 0, initialY = 0;
 
-        const onMove = (me) => {
-            // 關鍵防護：只有在 mousedown 後才處理移動
-            if (!isPointerDown) return;
-            const dx = me.clientX - startX;
-            const dy = me.clientY - startY;
+        main.addEventListener('pointerdown', (e) => {
+            // 只響應主鍵（左鍵）
+            if (e.button !== 0) return;
+            e.preventDefault();
+
+            isDragging = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            initialX = ball.offsetLeft;
+            initialY = ball.offsetTop;
+            ball.style.transition = 'none';
+            main.style.cursor = 'grabbing';
+
+            // 關鍵：Pointer Capture 確保所有事件在鼠標移出窗口後仍由此元素接收
+            main.setPointerCapture(e.pointerId);
+        });
+
+        main.addEventListener('pointermove', (e) => {
+            // 沒有主指鉢錢則跳過
+            if (!main.hasPointerCapture(e.pointerId)) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
             if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
                 isDragging = true;
                 let nextX = initialX + dx;
@@ -261,14 +276,12 @@
                 ball.style.right = 'auto';
                 ball.style.bottom = 'auto';
             }
-        };
+        });
 
-        const cleanupAndSnap = () => {
-            // 立即重置狀態，防止殘留
-            if (!isPointerDown) return; // 防止重複觸發
-            isPointerDown = false;
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', cleanupAndSnap);
+        // pointerup / pointercancel 都触發此清理函數
+        const onPointerEnd = (e) => {
+            if (!main.hasPointerCapture(e.pointerId)) return;
+            main.releasePointerCapture(e.pointerId);
             main.style.cursor = 'grab';
 
             if (!isDragging) {
@@ -293,27 +306,8 @@
             isDragging = false;
         };
 
-        main.addEventListener('mousedown', (e) => {
-            // 只響應主鍵（左鍵）點擊
-            if (e.button !== 0) return;
-            e.preventDefault();
-            isPointerDown = true;
-            isDragging = false;
-            startX = e.clientX;
-            startY = e.clientY;
-            initialX = ball.offsetLeft;
-            initialY = ball.offsetTop;
-            ball.style.transition = 'none';
-            main.style.cursor = 'grabbing';
-            // 在 document 上綁定，確保不丟失
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', cleanupAndSnap);
-        });
-
-        // 額外保護：若窗口失焦也重置狀態
-        window.addEventListener('blur', () => {
-            if (isPointerDown) cleanupAndSnap();
-        });
+        main.addEventListener('pointerup', onPointerEnd);
+        main.addEventListener('pointercancel', onPointerEnd);
     }
 
     function addDetailRow(data = {}) {
