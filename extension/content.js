@@ -1,7 +1,6 @@
 /**
  * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.6.2
- * 核心：實現帶有視覺回饋的人員 ID 快取與自動匹配
+ * Version: 4.9.5 - Select Display Fix
  */
 
 (function () {
@@ -10,131 +9,181 @@
 
     let panel, ball;
     let projects = [];
-    let fields = ['label', 'propertyName', 'reportNo', 'manager', 'projectContent', 'budget', 'total', 'quoteType', 'buyType', 'currency', 'inviteCount', 'replyCount', 'reason', 'winnerName', 'contractCurrency', 'contractAmount'];
-    let inputs = {};
-    let lastPickedId = "";
+    const fields = ['label', 'propertyName', 'reportNo', 'manager', 'projectContent', 'budget', 'total', 'quoteType', 'buyType', 'currency', 'inviteCount', 'replyCount', 'reason', 'winnerName', 'contractCurrency', 'contractAmount'];
+    
+    // 映射表：將顯示文字轉為 OA 系統預期的索引值 (Value)
+    const quoteMap = { "0": "0", "1": "1", "2": "2", "3": "3", "報價邀請": "0", "招標": "1", "特殊情況 (緊急)": "2", "續約": "3" };
+    const buyMap = { 
+        "0": "0", "1": "1", "2": "2", "3": "3", "4": "4", "5": "5", "6": "6",
+        "保養維修材料": "0", "保養合約分判": "1", "工程材料": "2", 
+        "分判工程": "3", "後加工程": "4", "固定資產": "5", "其他": "6" 
+    };
 
     function init() {
         if (document.getElementById('oa-side-panel')) return;
 
+        // 注入橋接腳本至頁面環境
         const script = document.createElement('script');
         script.src = chrome.runtime.getURL('main_bridge.js');
         (document.head || document.documentElement).appendChild(script);
 
         injectPanelHTML();
         injectBall();
+        updateVisibility();
         syncData();
         startPickerWatcher();
+        listenMessages();
+
+        // 🌟 核心同步功能：監聽儲存庫變動
+        chrome.storage.onChanged.addListener((changes, area) => {
+            if (area === 'local' && changes.oa_projects_v13) {
+                console.log("OA Content: Storage change detected! Syncing UI...");
+                projects = changes.oa_projects_v13.newValue || [];
+                renderList();
+            }
+            if (area === 'local' && changes.oa_show_float_ball !== undefined) {
+                updateVisibility();
+            }
+        });
+    }
+
+    async function updateVisibility() {
+        chrome.storage.local.get(['oa_show_float_ball'], (res) => {
+            const visible = (res.oa_show_float_ball !== false);
+            const display = visible ? 'flex' : 'none';
+            if (ball) ball.style.display = display;
+            if (panel && !panel.classList.contains('open')) panel.style.display = display;
+        });
+    }
+
+    function listenMessages() {
+        chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+            if (msg.type === "OA_LINK_FILL" || msg.type === "OA_LINK_CLEAR") {
+                console.log("OA Content: Proxying Message to Bridge ->", msg.type);
+                if (msg.project) msg.project = normalizeProjectData(msg.project);
+                window.postMessage(msg, "*"); 
+                sendResponse({ success: true });
+            } else if (msg.type === "TOGGLE_FLOAT_BALL") {
+                updateVisibility();
+                sendResponse({ success: true });
+            }
+            return true;
+        });
+    }
+
+    function normalizeProjectData(p) {
+        const np = JSON.parse(JSON.stringify(p));
+        // 確保發送給 Bridge 的是數值 ID
+        if (np.quoteType && isNaN(np.quoteType)) np.quoteType = quoteMap[np.quoteType] || np.quoteType;
+        if (np.buyType && isNaN(np.buyType)) np.buyType = buyMap[np.buyType] || np.buyType;
+        return np;
     }
 
     function injectPanelHTML() {
         panel = document.createElement('div');
         panel.id = 'oa-side-panel';
         panel.innerHTML = `
-            <div id="oa-panel-header">
-                <div class="oa-header-left">
-                    <div class="oa-logo">un</div>
-                    <div class="oa-title-group">
-                        <span style="font-size:16px;">💾</span>
-                        <span>Projects</span>
-                        <span style="font-size:10px; opacity:0.5;">▼</span>
-                    </div>
+            <div class="ym-header">
+                <div class="ym-header-left" style="display:flex; align-items:center; gap:12px;">
+                    <div class="ym-logo">un</div>
+                    <div style="font-weight:700; font-size:16px; color:#1d1d1f; letter-spacing:-0.5px;">採購一鍵通 <span style="font-size:10px; opacity:0.3; vertical-align:middle;">▼</span></div>
                 </div>
-                <div class="oa-header-right">
-                    <span class="oa-header-icon" title="更多設置">···</span>
-                    <span class="oa-header-icon" id="oa-btn-refresh" title="同步數據">↻</span>
-                    <span class="oa-header-icon close" id="oa-panel-close" title="隱藏視窗">✕</span>
+                <div class="ym-header-right">
+                    <span id="oa-btn-refresh" title="同步數據">↻</span>
+                    <span id="oa-panel-close" title="隱藏視窗">✕</span>
                 </div>
             </div>
 
-            <div class="oa-domain-card">
-                <div class="oa-domain-info">
-                    <div class="oa-domain-icon">H</div>
-                    <span>oa.copm.com.cn</span>
-                </div>
-                <button class="oa-btn-save-top" id="btn-quick-save">保存</button>
+            <div class="oa-action-toolbar">
+                <button class="oa-tool-btn outline" id="oa-btn-add">新增</button>
+                <button class="oa-tool-btn" id="oa-btn-import-top">匯入</button>
+                <button class="oa-tool-btn" id="oa-btn-export-top">匯出</button>
+                <button class="oa-tool-btn primary" id="oa-btn-save-top">保存</button>
             </div>
 
             <div class="oa-p-tabs">
                 <div class="oa-p-tab active" id="tab-v-fill">快速填充</div>
                 <div class="oa-p-tab" id="tab-v-manage">項目管理</div>
+                <div class="oa-p-tab" id="tab-v-settings">更多設置</div>
             </div>
 
             <div id="view-v-fill" class="oa-panel-body">
-                <div class="oa-section-title">📖 填充列表</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <div style="font-weight:700; font-size:15px; color:#1d1d1f;">📖 填充列表</div>
+                    <input type="text" id="oa-search-input" placeholder="搜尋項目..." style="width:140px; padding:8px 12px; border-radius:14px; border:1px solid #e5e5ea; font-size:12px; outline:none;">
+                </div>
+                <div style="display:flex; gap:10px; margin-bottom:20px;">
+                    <button id="oa-btn-undo" style="flex:1; padding:10px; border-radius:12px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:12px; color:#666;">↩️ 恢復</button>
+                    <button id="oa-btn-clear" style="flex:1; padding:10px; border-radius:12px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:12px; color:#666;">🧹 清空</button>
+                </div>
                 <div id="oa-disp-list"></div>
             </div>
 
             <div id="view-v-manage" class="oa-panel-body hidden">
-                <h4 id="oa-p-title" style="margin-top:0;">新增項目</h4>
+                <div style="font-weight:700; font-size:16px; margin-bottom:20px; color:#1d1d1f;" id="oa-p-title">新增項目</div>
                 <input type="hidden" id="in-f-id">
                 <input type="hidden" id="in-f-managerId">
-                
+
                 <div class="oa-p-group"><label>項目標題 (顯示用)</label><input type="text" id="in-f-label" placeholder="例如：信成 - 電器材料"></div>
-                
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                    <div class="oa-p-group"><label>物業名稱</label><input type="text" id="in-f-propertyName" placeholder="例如: 九龍灣車廠"></div>
-                    <div class="oa-p-group">
-                        <label>項目經理</label>
-                        <div style="display:flex;gap:4px;">
-                            <input type="text" id="in-f-manager" style="flex:1;" placeholder="輸入姓名或選取">
-                            <button id="btn-f-pick" style="padding:4px 10px; border-radius:8px; border:1px solid #ddd; cursor:pointer; background:white;">🔍</button>
+
+                <div class="oa-grid-row">
+                    <div class="oa-p-group"><label>物業名稱</label><input type="text" id="in-f-propertyName"></div>
+                    <div class="oa-p-group"><label>項目經理</label>
+                        <div class="oa-picker-container">
+                            <input type="text" id="in-f-manager" placeholder="輸入或選取">
+                            <button id="btn-f-pick" class="oa-picker-btn">🔍</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="oa-p-group"><label>美博報價編號</label><input type="text" id="in-f-reportNo" placeholder="例如: MS/Q1241/24/kp"></div>
+                <div class="oa-p-group"><label>美博報價編號</label><input type="text" id="in-f-reportNo"></div>
+                <div class="oa-p-group"><label>項目內容</label><textarea id="in-f-projectContent" rows="3"></textarea></div>
 
-                <div class="oa-p-group"><label>項目內容</label><textarea id="in-f-projectContent" rows="3" placeholder="項目內容"></textarea></div>
-
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div class="oa-grid-row">
                     <div class="oa-p-group"><label>合約總價</label><input type="text" id="in-f-total"></div>
                     <div class="oa-p-group">
                         <label>報價形式</label>
                         <select id="in-f-quoteType">
                             <option value="">請選擇</option>
-                            <option value="報價邀請">報價邀請</option>
-                            <option value="招標">招標</option>
-                            <option value="特殊情況 (緊急)">特殊情況 (緊急)</option>
-                            <option value="續約">續約</option>
+                            <option value="0">報價邀請</option>
+                            <option value="1">招標</option>
+                            <option value="2">特殊情況 (緊急)</option>
+                            <option value="3">續約</option>
                         </select>
                     </div>
                 </div>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div class="oa-grid-row">
                     <div class="oa-p-group">
                         <label>採購類別</label>
                         <select id="in-f-buyType">
                             <option value="">請選擇</option>
-                            <option value="保養維修材料">保養維修材料</option>
-                            <option value="保養合約分判">保養合約分判</option>
-                            <option value="工程材料">工程材料</option>
-                            <option value="分判工程">分判工程</option>
-                            <option value="後加工程">後加工程</option>
-                            <option value="固定資產">固定資產</option>
-                            <option value="其他">其他</option>
+                            <option value="0">保養維修材料</option>
+                            <option value="1">保養合約分判</option>
+                            <option value="2">工程材料</option>
+                            <option value="3">分判工程</option>
+                            <option value="4">後加工程</option>
+                            <option value="5">固定資產</option>
+                            <option value="6">其他</option>
                         </select>
                     </div>
                     <div class="oa-p-group"><label>立項預算金額</label><input type="text" id="in-f-budget"></div>
                 </div>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                    <div class="oa-p-group">
-                        <label>幣種</label>
-                        <select id="in-f-currency">
-                            <option value="0">HKD</option>
-                            <option value="1">RMB</option>
-                            <option value="2">USD</option>
-                            <option value="3">MOP</option>
-                        </select>
-                    </div>
+                <div class="oa-p-group"><label>幣種</label>
+                    <select id="in-f-currency">
+                        <option value="0">HKD</option>
+                        <option value="1">RMB</option>
+                        <option value="2">USD</option>
+                        <option value="3">MOP</option>
+                    </select>
                 </div>
 
-                <div class="oa-section-title">📦 報價明細</div>
-                <div id="oa-detail-list" style="margin-bottom:10px;"></div>
-                <button id="btn-add-detail" style="width:100%; padding:8px; border:1px dashed #764ba2; color:#764ba2; background:none; border-radius:10px; cursor:pointer; margin-bottom:15px; font-weight:600;">+ 添加明細</button>
+                <div style="font-weight:700; font-size:13px; margin:20px 0 12px; color:var(--ym-primary);">📦 報價明細</div>
+                <div id="oa-detail-list"></div>
+                <button id="btn-add-detail" style="width:100%; padding:12px; border:1px dashed var(--ym-primary); color:var(--ym-primary); background:none; border-radius:14px; cursor:pointer; margin-bottom:20px; font-weight:700; font-size:13px;">+ 添加明細</button>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div class="oa-grid-row">
                     <div class="oa-p-group"><label>邀請公司 (間)</label><input type="text" id="in-f-inviteCount"></div>
                     <div class="oa-p-group"><label>有效報價/回復 (份)</label><input type="text" id="in-f-replyCount"></div>
                 </div>
@@ -142,7 +191,7 @@
                 <div class="oa-p-group"><label>理由</label><textarea id="in-f-reason" rows="2"></textarea></div>
                 <div class="oa-p-group"><label>中標公司</label><input type="text" id="in-f-winnerName"></div>
 
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div class="oa-grid-row">
                     <div class="oa-p-group">
                         <label>合約幣種</label>
                         <select id="in-f-contractCurrency">
@@ -155,49 +204,98 @@
                     <div class="oa-p-group"><label>合約金額</label><input type="text" id="in-f-contractAmount"></div>
                 </div>
 
-                <button id="btn-f-save" class="oa-p-btn-action">儲存項目</button>
-                <div id="btn-f-cancel" style="text-align:center; margin-top:10px; font-size:12px; color:#999; cursor:pointer;" class="hidden">取消編輯</div>
+                <button id="btn-f-save-main" class="oa-p-btn-action">儲存項目</button>
+                <button id="btn-f-save-as-new" class="oa-p-btn-action hidden" style="background:#fff; border:1px solid #1d1d1f; color:#1d1d1f; margin-top:12px;">另存為新項目</button>
+                <div id="btn-f-cancel" style="text-align:center; margin-top:15px; font-size:13px; color:#999; cursor:pointer;" class="hidden">取消編輯</div>
 
-                <div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px; display:flex; gap:8px;">
-                    <button id="btn-f-export" style="flex:1; font-size:11px; padding:6px; cursor:pointer;">匯出</button>
-                    <button id="btn-f-import" style="flex:1; font-size:11px; padding:6px; cursor:pointer;">匯入</button>
-                    <input type="file" id="in-f-file" class="hidden" accept=".csv">
+                <div style="margin-top:25px; border-top:1px solid var(--ym-border); padding-top:20px; display:flex; gap:12px;">
+                    <button id="btn-f-export" style="flex:1; font-size:12px; padding:10px; border-radius:12px; border:1px solid #ddd; background:#fff; cursor:pointer; font-weight:600;">匯出數據</button>
+                    <button id="btn-f-import" style="flex:1; font-size:12px; padding:10px; border-radius:12px; border:1px solid #ddd; background:#fff; cursor:pointer; font-weight:600;">匯入數據</button>
+                    <input type="file" id="in-f-file-side" class="hidden" accept=".csv">
                 </div>
             </div>
-            
-            <div style="padding:15px; font-size:10px; color:#ddd; text-align:center; background:#fafafa;">v4.6.2</div>
+
+            <div id="view-v-settings" class="oa-panel-body hidden">
+                <div style="font-weight:700; font-size:15px; margin-bottom:20px;">⚙️ 功能設置</div>
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:18px; background:#fff; border-radius:18px;">
+                    <label style="font-size:14px; font-weight:600; color:#1d1d1f;">顯示懸浮輔助球</label>
+                    <input type="checkbox" id="oa-check-ball-side" style="width:22px; height:22px; cursor:pointer;">
+                </div>
+                <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
+            </div>
+
+            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.9.7 (Appearance Fixed)</div>
         `;
         document.body.appendChild(panel);
-
-        fields.forEach(f => {
-            const el = document.getElementById('in-f-' + f);
-            if (el) {
-                inputs[f] = el;
-                if (['budget', 'total', 'amount', 'contractAmount'].includes(f)) {
-                    el.addEventListener('blur', function () {
-                        if (this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2);
-                    });
-                }
-            }
-        });
         bindEvents();
+    }
+
+    function injectBall() {
+        if (document.getElementById('oa-float-ball')) return;
+        ball = document.createElement('div');
+        ball.id = 'oa-float-ball';
+        ball.innerHTML = `<div class="oa-ball-main"><span>un</span></div>`;
+        document.body.appendChild(ball);
+
+        let isDragging = false, startX, startY, initialX, initialY;
+        const main = ball.querySelector('.oa-ball-main');
+
+        main.onmousedown = (e) => {
+            startX = e.clientX; startY = e.clientY;
+            initialX = ball.offsetLeft; initialY = ball.offsetTop;
+            isDragging = false; e.preventDefault();
+            
+            ball.style.transition = 'none';
+            main.style.cursor = 'grabbing';
+
+            const move = (me) => {
+                const dx = me.clientX - startX; const dy = me.clientY - startY;
+                if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                    isDragging = true;
+                    ball.style.left = (initialX + dx) + 'px';
+                    ball.style.top = (initialY + dy) + 'px';
+                    ball.style.right = 'auto'; ball.style.bottom = 'auto';
+                }
+            };
+
+            const up = () => {
+                document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+                main.style.cursor = 'grab';
+                
+                if (!isDragging) {
+                    panel.classList.toggle('open');
+                } else {
+                    const screenW = window.innerWidth;
+                    const finalX = screenW - 80;
+                    ball.style.transition = 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)';
+                    ball.style.left = finalX + 'px';
+                    
+                    main.classList.add('ball-snapping');
+                    setTimeout(() => {
+                        main.classList.remove('ball-snapping');
+                        ball.style.transition = '';
+                        ball.style.left = 'auto'; ball.style.right = '24px';
+                    }, 500);
+                }
+            };
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+        };
     }
 
     function addDetailRow(data = {}) {
         const container = document.getElementById('oa-detail-list');
-        if (!container) return;
         const div = document.createElement('div');
         div.className = 'oa-detail-row';
-        div.style = "background:#f9f9f9; padding:8px; border-radius:10px; margin-bottom:10px; position:relative; border:1px solid #eee;";
         div.innerHTML = `
-            <div style="position:absolute; right:5px; top:5px; cursor:pointer; color:#ccc;" onclick="this.parentElement.remove()">✕</div>
+            <div style="position:absolute; right:10px; top:10px; cursor:pointer; color:#ccc; font-size:18px; font-weight:700;" onclick="this.parentElement.remove()">✕</div>
             <div class="oa-p-group"><label>承判商</label><input type="text" class="dt-vendor" value="${data.vendorName || ''}"></div>
             <div class="oa-p-group"><label>報價內容</label><input type="text" class="dt-content" value="${data.content || ''}"></div>
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <div class="oa-grid-row">
                 <div class="oa-p-group">
                     <label>幣種</label>
                     <select class="dt-currency">
-                        <option value="0" ${data.detailCurrency === '0' ? 'selected' : ''}>HKD</option>
+                        <option value="0" ${data.detailCurrency === '0' || !data.detailCurrency ? 'selected' : ''}>HKD</option>
                         <option value="1" ${data.detailCurrency === '1' ? 'selected' : ''}>RMB</option>
                         <option value="2" ${data.detailCurrency === '2' ? 'selected' : ''}>USD</option>
                         <option value="3" ${data.detailCurrency === '3' ? 'selected' : ''}>MOP</option>
@@ -207,44 +305,92 @@
             </div>
         `;
         container.appendChild(div);
-        div.querySelector('.dt-amount').addEventListener('blur', function () {
-            if (this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2);
-        });
     }
 
-    function injectBall() {
-        ball = document.createElement('div');
-        ball.id = 'oa-float-ball';
-        ball.innerHTML = `<span>un</span>`;
-        document.body.appendChild(ball);
-        ball.onclick = () => { panel.classList.toggle('open'); if (panel.classList.contains('open')) syncData(); };
+    function resetForm() {
+        document.getElementById('in-f-id').value = "";
+        document.getElementById('in-f-managerId').value = "";
+        fields.forEach(f => {
+            const el = document.getElementById('in-f-'+f);
+            if(el) {
+                if (el.tagName === 'SELECT') {
+                    // 下拉選單默認值處理
+                    if (f === 'currency' || f==='contractCurrency') el.value = "0";
+                    else el.value = "";
+                } else {
+                    el.value = "";
+                }
+            }
+        });
+        document.getElementById('oa-detail-list').innerHTML = "";
+        addDetailRow();
+        document.getElementById('oa-p-title').innerText = '新增項目';
+        document.getElementById('btn-f-save-main').innerText = '儲存項目';
+        document.getElementById('btn-f-cancel').classList.add('hidden');
+        document.getElementById('btn-f-save-as-new').classList.add('hidden');
+    }
+
+    async function syncData() {
+        const res = await chrome.storage.local.get(['oa_projects_v13']);
+        projects = res.oa_projects_v13 || [];
+        renderList();
+    }
+
+    function exportToCSV() {
+        if(projects.length === 0) return alert("尚無數據可匯出");
+        const h = ["項目標題", "物業名稱", "報價編號", "項目經理", "項目內容", "立項預算", "合約總價", "報價形式", "採購類別", "幣種", "承判商", "報價內容", "明細幣種", "金額", "邀請公司", "有效報價", "推荐理由", "中標公司", "合約幣種", "合約金額"];
+        const rows = [];
+        projects.forEach(p => {
+            (p.details || [{}]).forEach(dt => {
+                const row = [p.label, p.propertyName, p.reportNo, p.manager, p.projectContent, p.budget, p.total, p.quoteType, p.buyType, p.currency, dt.vendorName, dt.content, dt.detailCurrency, dt.amount, p.inviteCount, p.replyCount, p.reason, p.winnerName, p.contractCurrency, p.contractAmount];
+                rows.push(row.map(v => `"${(String(v || '')).replace(/"/g, '""')}"`).join(","));
+            });
+        });
+        const b = new Blob(["\uFEFF" + h.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `OA_Data_${Date.now()}.csv`; a.click();
     }
 
     function bindEvents() {
         document.getElementById('oa-btn-refresh').onclick = syncData;
         document.getElementById('oa-panel-close').onclick = () => panel.classList.remove('open');
-        document.getElementById('btn-quick-save').onclick = () => document.getElementById('btn-f-save').click();
-        const tabFill = document.getElementById('tab-v-fill'), tabManage = document.getElementById('tab-v-manage');
-        const viewFill = document.getElementById('view-v-fill'), viewManage = document.getElementById('view-v-manage');
-        tabFill.onclick = () => { tabFill.classList.add('active'); tabManage.classList.remove('active'); viewFill.classList.remove('hidden'); viewManage.classList.add('hidden'); };
-        tabManage.onclick = () => { tabManage.classList.add('active'); tabFill.classList.remove('active'); viewManage.classList.remove('hidden'); viewFill.classList.add('hidden'); };
+        
+        document.getElementById('oa-btn-add').onclick = () => { resetForm(); document.getElementById('tab-v-manage').click(); };
+        document.getElementById('oa-btn-save-top').onclick = () => document.getElementById('btn-f-save-main').click();
+        document.getElementById('oa-btn-export-top').onclick = exportToCSV;
+        const fileIn = document.getElementById('in-f-file-side');
+        document.getElementById('oa-btn-import-top').onclick = () => fileIn.click();
 
+        const tFill = document.getElementById('tab-v-fill'), tManage = document.getElementById('tab-v-manage'), tSettings = document.getElementById('tab-v-settings');
+        const vFill = document.getElementById('view-v-fill'), vManage = document.getElementById('view-v-manage'), vSettings = document.getElementById('view-v-settings');
+
+        tFill.onclick = () => { tFill.classList.add('active'); tManage.classList.remove('active'); tSettings.classList.remove('active'); vFill.classList.remove('hidden'); vManage.classList.add('hidden'); vSettings.classList.add('hidden'); };
+        tManage.onclick = () => { tManage.classList.add('active'); tFill.classList.remove('active'); tSettings.classList.remove('active'); vManage.classList.remove('hidden'); vFill.classList.add('hidden'); vSettings.classList.add('hidden'); };
+        tSettings.onclick = () => { tSettings.classList.add('active'); tFill.classList.remove('active'); tManage.classList.remove('active'); vSettings.classList.remove('hidden'); vFill.classList.add('hidden'); vManage.classList.add('hidden'); };
+
+        const checkBall = document.getElementById('oa-check-ball-side');
+        chrome.storage.local.get(['oa_show_float_ball'], (res) => { if(checkBall) checkBall.checked = (res.oa_show_float_ball !== false); });
+        if(checkBall) checkBall.onchange = () => { chrome.storage.local.set({'oa_show_float_ball': checkBall.checked}); updateVisibility(); };
+
+        document.getElementById('oa-search-input').oninput = (e) => renderList(e.target.value.trim());
+        document.getElementById('oa-btn-undo').onclick = () => window.postMessage({type: "OA_LINK_FILL", project: {label:"恢復備份", details:[]}}, "*");
+        document.getElementById('oa-btn-clear').onclick = () => window.postMessage({type: "OA_LINK_CLEAR"}, "*");
+
+        document.getElementById('btn-add-detail').onclick = () => addDetailRow();
         document.getElementById('btn-f-pick').onclick = () => {
-            function findAndClickInFrames(win) {
+            const findAndClick = (win) => {
                 try {
                     const btn = win.document.getElementById('field1366309_browserbtn');
                     if (btn) { btn.click(); return true; }
-                    for (let i = 0; i < win.frames.length; i++) { if (findAndClickInFrames(win.frames[i])) return true; }
-                } catch (e) { } return false;
-            }
-            if (!findAndClickInFrames(window)) alert("⚠️ 找不到人員選擇按鈕");
+                    for (let i = 0; i<win.frames.length; i++) if(findAndClick(win.frames[i])) return true;
+                } catch(e){} return false;
+            };
+            findAndClick(window);
         };
 
-        document.getElementById('btn-add-detail').onclick = () => addDetailRow();
-        document.getElementById('btn-f-save').onclick = async () => {
-            const id = document.getElementById('in-f-id').value || "p_" + Date.now();
+        const saveFn = async (isNew = false) => {
+            const id = isNew ? "p_"+Date.now() : (document.getElementById('in-f-id').value || "p_"+Date.now());
             const p = { id: id, managerId: document.getElementById('in-f-managerId').value, details: [] };
-            fields.forEach(f => { if (inputs[f]) p[f] = inputs[f].value.trim(); });
+            fields.forEach(f => { const el = document.getElementById('in-f-'+f); if(el) p[f] = el.value.trim(); });
             document.querySelectorAll('.oa-detail-row').forEach(row => {
                 p.details.push({
                     vendorName: row.querySelector('.dt-vendor').value.trim(),
@@ -253,189 +399,162 @@
                     amount: row.querySelector('.dt-amount').value.trim()
                 });
             });
-            if (!p.label || p.details.length === 0) return alert("必填項缺失！");
-            const idx = projects.findIndex(x => x && x.id === id);
-            if (idx > -1) projects[idx] = p; else projects.push(p);
-            await chrome.storage.local.set({ 'oa_projects_v13': projects });
-            alert("✅ 保存成功"); syncData(); tabFill.click(); resetForm();
+            if (!p.label || p.details.length === 0) return alert("請輸入標題並添加至少一項明細");
+            
+            // 🌟 獲取最新狀態防止覆寫
+            const currentRes = await chrome.storage.local.get(['oa_projects_v13']);
+            let currentProjects = currentRes.oa_projects_v13 || [];
+            if (!isNew) {
+                const globalIdx = currentProjects.findIndex(x => x.id === id);
+                if(globalIdx > -1) currentProjects[globalIdx] = p; else currentProjects.push(p);
+            } else {
+                currentProjects.push(p);
+            }
+            
+            await chrome.storage.local.set({ 'oa_projects_v13': currentProjects });
+            alert("✅ 保存成功"); syncData(); tFill.click(); resetForm();
         };
 
-        document.getElementById('btn-f-cancel').onclick = () => { resetForm(); tabFill.click(); };
-        document.getElementById('btn-f-export').onclick = () => {
-            const h = ["項目標題", "物業名稱", "報價編號", "項目經理", "項目內容", "立項預算", "合約總價", "報價形式", "採購類別", "幣種", "承判商", "報價內容", "明細幣種", "金額", "邀請公司", "有效報價", "推荐理由", "中標公司", "合約幣種", "合約金額"];
-            const rows = [];
-            projects.forEach(p => {
-                (p.details || [{}]).forEach(dt => {
-                    const row = [p.label, p.propertyName, p.reportNo, p.manager, p.projectContent, p.budget, p.total, p.quoteType, p.buyType, p.currency, dt.vendorName, dt.content, dt.detailCurrency, dt.amount, p.inviteCount, p.replyCount, p.reason, p.winnerName, p.contractCurrency, p.contractAmount];
-                    rows.push(row.map(v => `"${(String(v || '')).replace(/"/g, '""')}"`).join(","));
-                });
-            });
-            const b = new Blob(["\uFEFF" + h.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8' });
-            const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `OA_Projects_${Date.now()}.csv`; a.click();
-        };
-
-        const fileIn = document.getElementById('in-f-file');
+        document.getElementById('btn-f-save-main').onclick = () => saveFn(false);
+        document.getElementById('btn-f-save-as-new').onclick = () => saveFn(true);
+        document.getElementById('btn-f-cancel').onclick = () => { resetForm(); tFill.click(); };
+        document.getElementById('btn-f-export').onclick = exportToCSV;
         document.getElementById('btn-f-import').onclick = () => fileIn.click();
+
         fileIn.onchange = (e) => {
             if (!e.target.files.length) return;
             const reader = new FileReader();
             reader.onload = async (ev) => {
-                const content = ev.target.result;
-                const lines = content.split(/\r?\n/).filter(l => l.trim());
+                const contentText = ev.target.result;
+                const lines = contentText.split(/\r?\n/).filter(l => l.trim());
                 if (lines.length < 2) return;
-
                 const grouped = {};
                 lines.slice(1).forEach(l => {
-                    const cols = [];
-                    let c = "", q = false;
+                    const cols = []; let c = "", q = false;
                     for (let i = 0; i < l.length; i++) {
-                        if (l[i] === '"') q = !q;
-                        else if (l[i] === ',' && !q) { cols.push(c); c = ""; }
-                        else c += l[i];
+                        if (l[i] === '"') q = !q; else if (l[i] === ',' && !q) { cols.push(c); c = ""; } else c += l[i];
                     }
                     cols.push(c);
-
-                    // 使用 項目標題 + 報價編號 作為 Key 進行分組
-                    const label = (cols[0] || "").trim();
-                    const reportNo = (cols[2] || "").trim();
+                    const label = (cols[0] || "").trim(), reportNo = (cols[2] || "").trim();
                     if (!label && !reportNo) return;
-
                     const k = label + "_" + reportNo;
                     if (!grouped[k]) {
                         grouped[k] = {
-                            id: "p_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
-                            label: label,
-                            propertyName: (cols[1] || "").trim(),
-                            reportNo: reportNo,
-                            manager: (cols[3] || "").trim(),
-                            projectContent: (cols[4] || "").trim(),
-                            budget: (cols[5] || "").trim(),
-                            total: (cols[6] || "").trim(),
-                            quoteType: (cols[7] || "").trim(),
-                            buyType: (cols[8] || "").trim(),
-                            currency: (cols[9] || "0").trim(),
-                            details: [],
-                            inviteCount: (cols[14] || "").trim(),
-                            replyCount: (cols[15] || "").trim(),
-                            reason: (cols[16] || "").trim(),
-                            winnerName: (cols[17] || "").trim(),
-                            contractCurrency: (cols[18] || "0").trim(),
-                            contractAmount: (cols[19] || "").trim()
+                            id: "p_" + Date.now() + "_" + Math.floor(Math.random()*1000),
+                            label: label, propertyName: (cols[1] || "").trim(), reportNo: reportNo,
+                            manager: (cols[3] || "").trim(), projectContent: (cols[4] || "").trim(),
+                            budget: (cols[5] || "").trim(), total: (cols[6] || "").trim(),
+                            quoteType: (cols[7] || "").trim(), buyType: (cols[8] || "").trim(),
+                            currency: (cols[9] || "0").trim(), details: [],
+                            inviteCount: (cols[14] || "").trim(), replyCount: (cols[15] || "").trim(),
+                            reason: (cols[16] || "").trim(), winnerName: (cols[17] || "").trim(),
+                            contractCurrency: (cols[18] || "0").trim(), contractAmount: (cols[19] || "").trim()
                         };
                     }
-
-                    // 添加明細（承判商、內容、幣種、金額）
                     if (cols[10] || cols[11] || cols[13]) {
-                        grouped[k].details.push({
-                            vendorName: (cols[10] || "").trim(),
-                            content: (cols[11] || "").trim(),
-                            detailCurrency: (cols[12] || "0").trim(),
-                            amount: (cols[13] || "").trim()
-                        });
+                        grouped[k].details.push({ vendorName: (cols[10]||"").trim(), content: (cols[11]||"").trim(), detailCurrency: (cols[12]||"0").trim(), amount: (cols[13]||"").trim() });
                     }
                 });
-
                 const imported = Object.values(grouped);
                 if (imported.length > 0) {
-                    projects = imported;
-                    await chrome.storage.local.set({ 'oa_projects_v13': projects });
-                    alert(`✅ 成功匯入 ${imported.length} 個項目`);
-                    syncData();
-                } else {
-                    alert("⚠️ 未發現有效數據");
+                    await chrome.storage.local.set({ 'oa_projects_v13': imported });
+                    alert(`✅ 成功匯入 ${imported.length} 個項目`); syncData();
                 }
             };
             reader.readAsText(e.target.files[0]);
-            fileIn.value = ""; // 重置 input 以便下次選擇同一個文件
+            fileIn.value = "";
         };
     }
 
-    async function syncData() { const res = await chrome.storage.local.get(['oa_projects_v13']); projects = res.oa_projects_v13 || []; renderList(); }
-
-    function renderList() {
-        const list = document.getElementById('oa-disp-list'); if (!list) return;
-        list.innerHTML = projects.length === 0 ? '<p style="padding:40px;">尚無記錄</p>' : '';
-        projects.forEach(p => {
-            const div = document.createElement('div'); div.className = 'oa-p-item';
-            div.innerHTML = `<div style="display:flex; justify-content:space-between;"><div><strong>${p.label}</strong><br><small>${p.manager || ''}</small></div><div class="edit-btn">✎</div></div>`;
-            div.onclick = () => { console.log("Filling Project:", p); runFill(p); };
-            div.querySelector('.edit-btn').onclick = (e) => {
-                e.stopPropagation(); document.getElementById('in-f-id').value = p.id; document.getElementById('in-f-managerId').value = p.managerId || "";
-                fields.forEach(f => { if (inputs[f]) inputs[f].value = p[f] || ""; });
-                const dList = document.getElementById('oa-detail-list'); dList.innerHTML = "";
-                if (p.details) p.details.forEach(dt => addDetailRow(dt));
-                document.getElementById('tab-v-manage').click(); document.getElementById('btn-f-save').textContent = "更新項目"; document.getElementById('btn-f-cancel').classList.remove('hidden');
-                syncManagerFeedback(p.manager);
-            };
-            list.appendChild(div);
-        });
-    }
-
-    function runFill(p) {
-        const msg = { type: "OA_LINK_FILL", project: JSON.parse(JSON.stringify(p)) };
-        window.postMessage(msg, "*");
-        const bc = (win) => { for (let i = 0; i < win.frames.length; i++) { try { win.frames[i].postMessage(msg, "*"); bc(win.frames[i]); } catch (e) { } } };
-        bc(window);
-    }
-
-    function resetForm() {
-        document.getElementById('in-f-id').value = ""; document.getElementById('in-f-managerId').value = "";
-        fields.forEach(f => { if (inputs[f]) inputs[f].value = (f === 'currency' || f === 'contractCurrency') ? '0' : ''; });
-        document.getElementById('oa-detail-list').innerHTML = ""; addDetailRow();
-        document.getElementById('btn-f-save').textContent = "儲存項目"; document.getElementById('btn-f-cancel').classList.add('hidden');
-        document.getElementById('in-f-manager').style.backgroundColor = "";
-    }
-
-    async function syncManagerFeedback(name) {
-        if (!name) return;
-        const res = await chrome.storage.local.get(['oa_manager_cache']);
-        const cache = res.oa_manager_cache || {};
-        if (cache[name.trim()]) {
-            document.getElementById('in-f-manager').style.backgroundColor = "#e8f5e9";
-            document.getElementById('in-f-managerId').value = cache[name.trim()];
-        } else {
-            document.getElementById('in-f-manager').style.backgroundColor = "";
+    function renderList(query = "") {
+        const listContainer = document.getElementById('oa-disp-list'); if (!listContainer) return;
+        let filtered = projects;
+        if (query) {
+            const q = query.toLowerCase();
+            filtered = projects.filter(p => (p.label && p.label.toLowerCase().includes(q)));
         }
+        listContainer.innerHTML = filtered.length === 0 ? '<p style="text-align:center; color:#ccd; padding:40px; font-size:12px;">尚無記錄</p>' : '';
+        filtered.forEach(p => {
+            const div = document.createElement('div'); div.className = 'oa-p-item';
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="flex:1;">
+                        <div style="font-weight:700; font-size:15px; color:#1d1d1f; margin-bottom:4px;">${p.label}</div>
+                        <div style="font-size:11px; color:#86868b; letter-spacing:0.5px;">報價編號: ${p.reportNo || '--'}</div>
+                    </div>
+                    <div style="display:flex; gap:16px;">
+                        <span class="edit-btn" style="cursor:pointer; font-size:18px; opacity:0.3; transition:opacity 0.2s;">✎</span>
+                        <span class="del-btn" style="cursor:pointer; font-size:18px; color:#ff4d4f; opacity:0.3; transition:opacity 0.2s;">🗑</span>
+                    </div>
+                </div>
+            `;
+            div.onclick = (e) => {
+                if (e.target.classList.contains('edit-btn') || e.target.classList.contains('del-btn')) return;
+                const normP = normalizeProjectData(p);
+                window.postMessage({type: "OA_LINK_FILL", project: normP}, "*");
+                div.style.background = '#f2f2f7';
+                setTimeout(() => div.style.background = '#fff', 200);
+            };
+            div.querySelector('.edit-btn').onclick=(e)=>{
+                e.stopPropagation(); document.getElementById('in-f-id').value=p.id;
+                document.getElementById('in-f-managerId').value = p.managerId || "";
+                
+                // 🌟 強化匹配邏輯：支持 Value 與 Text 雙向匹配
+                fields.forEach(f=>{
+                    const el=document.getElementById('in-f-'+f);
+                    if(el) {
+                        const val = p[f] || '';
+                        if (el.tagName === 'SELECT') {
+                            console.log(`OA Edit: Setting select [${f}] to [${val}]`);
+                            let found = false;
+                            for(let opt of el.options) {
+                                // 強制轉為字串進行精確或文字匹配
+                                if(opt.value === String(val) || opt.text.trim() === String(val).trim()) {
+                                    el.value = opt.value;
+                                    console.log(`OA Edit: Matched [${opt.text}] (value:${opt.value})`);
+                                    found = true; break;
+                                }
+                            }
+                            if(!found) {
+                                console.warn(`OA Edit: Field [${f}] val [${val}] not found in options`);
+                                el.value = "";
+                            }
+                        } else {
+                            el.value = val;
+                        }
+                    }
+                });
+
+                document.getElementById('oa-detail-list').innerHTML='';
+                if(p.details && p.details.length > 0) p.details.forEach(dt=>addDetailRow(dt)); else addDetailRow();
+                document.getElementById('oa-p-title').innerText='編輯項目';
+                document.getElementById('btn-f-save-main').innerText='更新項目';
+                document.getElementById('btn-f-save-as-new').classList.remove('hidden');
+                document.getElementById('btn-f-cancel').classList.remove('hidden');
+                document.getElementById('tab-v-manage').click();
+            };
+            div.querySelector('.del-btn').onclick=(e)=>{
+                e.stopPropagation(); if(confirm(`確定刪除「${p.label}」？`)){ 
+                    const newProjects = projects.filter(x=>x.id!==p.id); 
+                    chrome.storage.local.set({'oa_projects_v13': newProjects});
+                }
+            };
+            listContainer.appendChild(div);
+        });
     }
 
     function startPickerWatcher() {
         setInterval(() => {
-            async function checkPicker(win) {
-                try {
-                    const val = win.document.getElementById('field1366309'), span = win.document.getElementById('field1366309span');
-                    if (val && val.value && span && span.innerText.trim()) {
-                        const name = span.innerText.trim(), id = val.value;
-                        const nameIn = document.getElementById('in-f-manager'), idIn = document.getElementById('in-f-managerId');
-                        if (nameIn && nameIn.value !== name) {
-                            nameIn.value = name; idIn.value = id; console.log("OA Bubble: Manager Cached ->", name, id);
-                            const res = await chrome.storage.local.get(['oa_manager_cache']);
-                            const cache = res.oa_manager_cache || {}; cache[name] = id;
-                            await chrome.storage.local.set({ 'oa_manager_cache': cache });
-                            nameIn.style.backgroundColor = "#e8f5e9";
-                            return true;
-                        }
-                    }
-                } catch (e) { } return false;
-            }
-            if (checkPicker(window)) return;
-            for (let i = 0; i < window.frames.length; i++) { try { if (checkPicker(window.frames[i])) return; } catch (e) { } }
-        }, 1200);
-
-        const mgrIn = document.getElementById('in-f-manager');
-        if (mgrIn) {
-            mgrIn.addEventListener('input', async function () {
-                const name = this.value.trim(), idIn = document.getElementById('in-f-managerId');
-                if (!name || !idIn) { this.style.backgroundColor = ""; return; }
-                const res = await chrome.storage.local.get(['oa_manager_cache']);
-                const cache = res.oa_manager_cache || {};
-                if (cache[name]) {
-                    idIn.value = cache[name]; console.log("OA Bubble: Matched ->", cache[name]);
-                    this.style.backgroundColor = "#e8f5e9";
-                } else {
-                    this.style.backgroundColor = ""; idIn.value = "";
+            const span = document.getElementById('field1366309span'), val = document.getElementById('field1366309');
+            if (span && val && val.value) {
+                const nameIn = document.getElementById('in-f-manager');
+                if (nameIn && nameIn.value !== span.innerText.trim()) {
+                    nameIn.value = span.innerText.trim();
+                    document.getElementById('in-f-managerId').value = val.value;
                 }
-            });
-        }
+            }
+        }, 1200);
     }
+
     init();
 })();

@@ -87,25 +87,8 @@ document.addEventListener('DOMContentLoaded', async function () {
         document.getElementById('oa-btn-export').onclick = () => document.getElementById('btn-f-export').click();
         document.getElementById('oa-btn-import').onclick = () => document.getElementById('btn-f-import').click();
 
-        const tabFill = document.getElementById('tab-v-fill'), tabManage = document.getElementById('tab-v-manage'), tabSettings = document.getElementById('tab-v-settings');
-        const viewFill = document.getElementById('view-v-fill'), viewManage = document.getElementById('view-v-manage'), viewSettings = document.getElementById('view-v-settings');
-        
-        tabFill.onclick = () => { tabFill.classList.add('active'); tabManage.classList.remove('active'); tabSettings.classList.remove('active'); viewFill.classList.remove('hidden'); viewManage.classList.add('hidden'); viewSettings.classList.add('hidden'); };
-        tabManage.onclick = () => { tabManage.classList.add('active'); tabFill.classList.remove('active'); tabSettings.classList.remove('active'); viewManage.classList.remove('hidden'); viewFill.classList.add('hidden'); viewSettings.classList.add('hidden'); };
-        tabSettings.onclick = () => { tabSettings.classList.add('active'); tabFill.classList.remove('active'); tabManage.classList.remove('active'); viewSettings.classList.remove('hidden'); viewFill.classList.add('hidden'); viewManage.classList.add('hidden'); };
-
-        // 懸浮輔助球開關邏輯
-        const checkBall = document.getElementById('oa-check-ball');
-        if (checkBall) {
-            chrome.storage.local.get(['oa_show_float_ball'], (res) => {
-                checkBall.checked = (res.oa_show_float_ball !== false);
-            });
-            checkBall.onchange = () => {
-                const visible = checkBall.checked;
-                chrome.storage.local.set({ 'oa_show_float_ball': visible });
-                sendMessageToActiveTab({ type: "TOGGLE_FLOAT_BALL", visible: visible });
-            };
-        }
+        tabFill.onclick = () => { tabFill.classList.add('active'); tabManage.classList.remove('active'); viewFill.classList.remove('hidden'); viewManage.classList.add('hidden'); };
+        tabManage.onclick = () => { tabManage.classList.add('active'); tabFill.classList.remove('active'); viewManage.classList.remove('hidden'); viewFill.classList.add('hidden'); };
 
         document.getElementById('btn-f-pick').onclick = () => {
             alert("⚠️ 彈窗介面無法直接讀取頁面中的人員選擇器，請在網頁上的 OA 懸浮面板使用此功能，或手動輸入經理名稱。");

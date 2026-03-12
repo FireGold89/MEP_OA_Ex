@@ -1,0 +1,1923 @@
+﻿diff --git a/extension/content.css b/extension/content.css
+index dade65a..a21b16c 100644
+--- a/extension/content.css
++++ b/extension/content.css
+@@ -5,38 +5,140 @@
+     position: fixed;
+     width: 48px;
+     height: 48px;
++    z-index: 999999;
++    user-select: none;
++    right: 20px;
++    bottom: 50px;
++}
++
++/* 蝣箔????銝餅?璅?? */
++#oa-float-ball .oa-ball-main {
++    position: absolute;
++    width: 48px;
++    height: 48px;
+     background: white;
+     border-radius: 50%;
+     display: flex;
+     align-items: center;
+     justify-content: center;
+-    cursor: pointer;
+-    z-index: 999999;
++    cursor: grab;
+     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+-    user-select: none;
+-    transition: transform 0.2s, right 0.3s, opacity 0.3s;
+-    right: 20px;
+-    bottom: 50px;
+     border: 1px solid #f0f0f0;
++    z-index: 2;
++    transition: transform 0.2s;
+ }
+ 
+-#oa-float-ball img,
+-#oa-float-ball span {
+-    width: 28px;
+-    height: 28px;
++#oa-float-ball .oa-ball-main:active {
++    cursor: grabbing;
++}
++
++#oa-float-ball .oa-ball-main span {
+     color: #764ba2;
+     font-weight: bold;
++    font-size: 16px;
++}
++
++/* 撅?????瑁孛?敶Ｘ???嚗?虜璅宏??桅葉?詨瘨仃 */
++#oa-float-ball::before {
++    content: '';
++    position: absolute;
++    top: 50%;
++    left: 50%;
++    width: 48px;
++    height: 48px;
++    transform: translate(-50%, -50%);
++    border-radius: 50%;
++    z-index: 0;
++}
++
++#oa-float-ball:not(.dragging):hover::before {
++    width: 180px;
++    height: 180px;
++}
++
++/* 撅?撘??詨 */
++#oa-float-ball .oa-ball-menu {
++    position: absolute;
++    top: 50%;
++    left: 50%;
++    width: 0;
++    height: 0;
++    z-index: 1;
++}
++
++.oa-ball-action {
++    position: absolute;
++    top: 0;
++    left: 0;
++    width: 36px;
++    height: 36px;
++    margin-top: -18px;
++    margin-left: -18px;
++    background: white;
++    border-radius: 50%;
++    display: flex;
++    align-items: center;
++    justify-content: center;
++    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
++    cursor: pointer;
++    font-size: 16px;
++    color: #555;
++    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
++    opacity: 0;
++    transform: scale(0.5);
++    pointer-events: none;
++    border: 1px solid #eee;
+ }
+ 
+-#oa-float-ball.is-docked {
+-    right: -24px;
++.oa-ball-action svg {
++    width: 18px;
++    height: 18px;
++    stroke: currentColor;
++    fill: none;
++    transition: stroke 0.2s;
++}
++
++/* 撅????憭?閮剖? (Hover ??) */
++#oa-float-ball:not(.dragging):hover .oa-ball-action {
++    opacity: 1;
++    transform: scale(1);
++    pointer-events: auto;
++}
++
++#oa-float-ball:not(.dragging):hover .oa-ball-action:hover {
++    background: #f8f8f8;
++    color: #764ba2;
++}
++
++#oa-float-ball:not(.dragging):hover .oa-ball-action.pos-top {
++    top: -60px;
++    left: 0;
++}
++
++#oa-float-ball:not(.dragging):hover .oa-ball-action.pos-bottom {
++    top: 60px;
++    left: 0;
++}
++
++#oa-float-ball:not(.dragging):hover .oa-ball-action.pos-left {
++    top: -45px;
++    left: -45px;
++}
++
++#oa-float-ball:not(.dragging):hover .oa-ball-action.pos-right {
++    top: 45px;
++    left: -45px;
++}
++
++/* ???梯??摩蝔?靽?嚗閬?瘙矽??*/
++#oa-float-ball.is-docked .oa-ball-main {
++    transform: translateX(24px);
+     opacity: 0.6;
+ }
+ 
+-#oa-float-ball.is-docked:hover {
+-    right: 0px;
++#oa-float-ball.is-docked:hover .oa-ball-main {
++    transform: translateX(0);
+     opacity: 1;
+-    transform: scale(1.1);
+ }
+ 
+ /* --- 瘚桀?瘞?部閬? (靽桀儔?? --- */
+@@ -327,4 +429,13 @@
+ 
+ .hidden {
+     display: none !important;
++}
++
++/* ???瘚桃?隞塚??踹?撟脫??批捆 */
++@media print {
++
++    #oa-float-ball,
++    #oa-side-panel {
++        display: none !important;
++    }
+ }
+\ No newline at end of file
+diff --git a/extension/content.js b/extension/content.js
+index 577b0a7..8579a23 100644
+--- a/extension/content.js
++++ b/extension/content.js
+@@ -23,8 +23,35 @@
+ 
+         injectPanelHTML();
+         injectBall();
++        updateVisibility(); // ?寞?閮剖?憿舐內/?梯?
+         syncData();
+         startPickerWatcher();
++        listenMessages(); // ??靘 popup ??隞?+    }
++
++    async function updateVisibility() {
++        const res = await chrome.storage.local.get(['oa_show_float_ball']);
++        const visible = (res.oa_show_float_ball !== false);
++        const display = visible ? 'flex' : 'none';
++        if (ball) ball.style.display = display;
++        if (panel && !panel.classList.contains('open')) panel.style.display = display;
++    }
++
++    function listenMessages() {
++        chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
++            if (msg.type === "TOGGLE_FLOAT_BALL") {
++                const display = msg.visible ? 'flex' : 'none';
++                if (ball) ball.style.display = display;
++                if (panel && !panel.classList.contains('open')) panel.style.display = display;
++                sendResponse({ success: true });
++            } else if (msg.type === "OA_LINK_FILL" || msg.type === "OA_LINK_CLEAR") {
++                window.postMessage(msg, "*");
++                const bc = (win) => { for (let i = 0; i < win.frames.length; i++) { try { win.frames[i].postMessage(msg, "*"); bc(win.frames[i]); } catch (e) { } } };
++                bc(window);
++                sendResponse({ success: true });
++            }
++            return true; // Keep message channel open for async response
++        });
+     }
+ 
+     function injectPanelHTML() {
+@@ -36,7 +63,7 @@
+                     <div class="oa-logo">un</div>
+                     <div class="oa-title-group">
+                         <span style="font-size:16px;">?</span>
+-                        <span>Projects</span>
++                        <span>?∟頃銝?菟?/span>
+                         <span style="font-size:10px; opacity:0.5;">??/span>
+                     </div>
+                 </div>
+@@ -47,12 +74,11 @@
+                 </div>
+             </div>
+ 
+-            <div class="oa-domain-card">
+-                <div class="oa-domain-info">
+-                    <div class="oa-domain-icon">H</div>
+-                    <span>oa.copm.com.cn</span>
+-                </div>
+-                <button class="oa-btn-save-top" id="btn-quick-save">靽?</button>
++            <div class="oa-action-toolbar" style="padding:10px 15px; display:flex; gap:6px; background:#fff; border-bottom:1px solid #eee;">
++                <button class="oa-tool-btn" id="oa-btn-add" title="?啣??" style="flex:1; padding:6px 0; border:1px solid #764ba2; color:#764ba2; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">?啣?</button>
++                <button class="oa-tool-btn" id="oa-btn-import" title="?臬 CSV" style="flex:1; padding:6px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">?臬</button>
++                <button class="oa-tool-btn" id="oa-btn-export" title="?臬 CSV" style="flex:1; padding:6px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">?臬</button>
++                <button class="oa-tool-btn" id="oa-btn-save" title="靽??嗅?" style="flex:1.2; padding:6px 0; border:none; color:#fff; background:linear-gradient(135deg, #764ba2 0%, #667eea 100%); border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">靽?</button>
+             </div>
+ 
+             <div class="oa-p-tabs">
+@@ -61,7 +87,17 @@
+             </div>
+ 
+             <div id="view-v-fill" class="oa-panel-body">
+-                <div class="oa-section-title">?? 憛怠??”</div>
++                <div class="oa-section-header" style="display:flex; justify-content:space-between; align-items:center;">
++                    <div class="oa-section-title">?? 憛怠??”</div>
++                    <div class="oa-search-box" style="margin-left:auto;">
++                        <input type="text" id="oa-search-input" placeholder="???????.." style="width:120px; padding:4px 8px; border-radius:12px; border:1px solid #ddd; font-size:12px; outline:none;">
++                    </div>
++                </div>
++                <!-- ?啣?嚗翰?‵?????極?瑟? -->
++                <div class="oa-fill-toolbar" style="padding:0 10px 10px 10px; display:flex; gap:8px;">
++                    <button id="oa-btn-undo" class="oa-tool-btn" style="flex:1; padding:5px; border-radius:6px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:11px;">?抬? ?Ｗ儔</button>
++                    <button id="oa-btn-clear" class="oa-tool-btn" style="flex:1; padding:5px; border-radius:6px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:11px;">?完 皜征</button>
++                </div>
+                 <div id="oa-disp-list"></div>
+             </div>
+ 
+@@ -156,6 +192,7 @@
+                 </div>
+ 
+                 <button id="btn-f-save" class="oa-p-btn-action">?脣??</button>
++                <button id="btn-f-save-as-new" class="oa-p-btn-action hidden" style="background:none; border:1px solid #764ba2; color:#764ba2; margin-top:10px;">?血??箸?</button>
+                 <div id="btn-f-cancel" style="text-align:center; margin-top:10px; font-size:12px; color:#999; cursor:pointer;" class="hidden">??蝺刻摩</div>
+ 
+                 <div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px; display:flex; gap:8px;">
+@@ -181,6 +218,14 @@
+             }
+         });
+         bindEvents();
++        initSearch();
++    }
++
++    function initSearch() {
++        const input = document.getElementById('oa-search-input');
++        if (input) {
++            input.oninput = () => renderList(input.value.trim());
++        }
+     }
+ 
+     function addDetailRow(data = {}) {
+@@ -213,17 +258,186 @@
+     }
+ 
+     function injectBall() {
++        if (document.getElementById('oa-float-ball')) return;
++
++        // ?刻撟蝵抬??脫迫皛??脣 iframe 銝仃鈭辣
++        const dragOverlay = document.createElement('div');
++        dragOverlay.id = 'oa-drag-overlay';
++        dragOverlay.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:9999998; display:none; cursor:grabbing;';
++        document.body.appendChild(dragOverlay);
++
+         ball = document.createElement('div');
+         ball.id = 'oa-float-ball';
+-        ball.innerHTML = `<span>un</span>`;
++        ball.innerHTML = `
++            <div class="oa-ball-menu">
++                <div class="oa-ball-action pos-top" title="??/?梯??Ｘ" id="oa-ba-panel">
++                    <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
++                </div>
++                <div class="oa-ball-action pos-left" title="?Ｗ儔銝?甇? id="oa-ba-undo">
++                    <svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
++                </div>
++                <div class="oa-ball-action pos-right" title="皜征銵典" id="oa-ba-clear">
++                    <svg viewBox="0 0 24 24"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><line x1="18" y1="9" x2="12" y2="15"/><line x1="12" y1="9" x2="18" y2="15"/></svg>
++                </div>
++                <div class="oa-ball-action pos-bottom" title="撖怠??圈??? id="oa-ba-fill">
++                    <svg viewBox="0 0 24 24"><path d="M21 16.039c-.532-.054-1.071-.168-1.574-.344a6 6 0 0 1-3.082-3.082c-.176-.503-.29-1.042-.344-1.574-.054.532-.168 1.071-.344 1.574a6 6 0 0 1-3.082 3.082c-.503.176-1.042.29-1.574.344.532.054 1.071.168 1.574.344a6 6 0 0 1 3.082 3.082c.176.503.29 1.042.344 1.574.054-.532.168-1.071.344-1.574a6 6 0 0 1 3.082-3.082c.503-.176 1.042-.29 1.574-.344Z"/><path d="M9 7.02c-.355-.036-.714-.112-1.05-.23a4 4 0 0 1-2.054-2.055C5.776 4.399 5.7 4.04 5.665 3.685c-.035.355-.111.714-.23 1.05a4 4 0 0 1-2.054 2.054c-.336.118-.695.194-1.05.23.355.036.714.112 1.05.23a4 4 0 0 1 2.054 2.055c.118.336.195.695.23 1.05.036-.355.112-.714.23-1.05a4 4 0 0 1 2.055-2.054c.335-.118.694-.194 1.05-.23Z"/></svg>
++                </div>
++            </div>
++            <div class="oa-ball-main"><span>un</span></div>
++        `;
+         document.body.appendChild(ball);
+-        ball.onclick = () => { panel.classList.toggle('open'); if (panel.classList.contains('open')) syncData(); };
++
++        let isDragging = false;
++        let startX, startY, initialX, initialY;
++        const mainBtn = ball.querySelector('.oa-ball-main');
++
++        mainBtn.addEventListener('mousedown', dragStart);
++
++        function dragStart(e) {
++            initialX = ball.offsetLeft;
++            initialY = ball.offsetTop;
++            startX = e.clientX;
++            startY = e.clientY;
++            isDragging = false;
++
++            ball.style.right = 'auto';
++            ball.style.bottom = 'auto';
++            ball.style.left = initialX + 'px';
++            ball.style.top = initialY + 'px';
++            ball.style.transition = 'none';
++
++            dragOverlay.style.display = 'block';
++            ball.classList.add('dragging'); // ?踹? css hover 閫貊?詨??詨
++
++            document.addEventListener('mousemove', drag);
++            document.addEventListener('mouseup', dragEnd);
++        }
++
++        function drag(e) {
++            let dx = e.clientX - startX;
++            let dy = e.clientY - startY;
++            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
++                isDragging = true;
++            }
++            if (!isDragging) return;
++
++            ball.style.left = (initialX + dx) + 'px';
++            ball.style.top = (initialY + dy) + 'px';
++        }
++
++        function dragEnd(e) {
++            dragOverlay.style.display = 'none';
++            document.removeEventListener('mousemove', drag);
++            document.removeEventListener('mouseup', dragEnd);
++            ball.classList.remove('dragging');
++
++            if (isDragging) {
++                // ?敶折?皜∪???(YouMind Style spring effect)
++                ball.style.transition = 'left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
++
++                // ???賊??啣?湧?蝺??銝衣Ⅱ靽?銝?頞閬?
++                let padding = 20;
++                let ballWidth = 48;
++                let rightLimit = window.innerWidth - ballWidth - padding;
++
++                let currentTop = parseInt(ball.style.top) || initialY;
++                if (currentTop < padding) currentTop = padding;
++                if (currentTop > window.innerHeight - ballWidth - padding) currentTop = window.innerHeight - ballWidth - padding;
++
++                // 撘箏?
++                ball.style.left = rightLimit + 'px';
++                ball.style.top = currentTop + 'px';
++
++                setTimeout(() => {
++                    ball.style.transition = 'none';
++                    ball.style.left = 'auto';
++                    ball.style.right = padding + 'px';
++                }, 400);
++
++                setTimeout(() => { isDragging = false; }, 50);
++            } else {
++                ball.style.transition = 'all 0.3s';
++                // ?芣??唾??粹????湔???Ｘ
++                panel.classList.toggle('open');
++                if (panel.classList.contains('open')) syncData();
++            }
++        }
++
++        // --- Action Buttons ---
++        document.getElementById('oa-ba-panel').onclick = (e) => {
++            e.stopPropagation();
++            panel.classList.toggle('open');
++            if (panel.classList.contains('open')) syncData();
++        };
++
++        document.getElementById('oa-ba-undo').onclick = (e) => {
++            e.stopPropagation();
++            if (document.getElementById('oa-btn-undo')) document.getElementById('oa-btn-undo').click();
++        };
++
++        document.getElementById('oa-ba-clear').onclick = (e) => {
++            e.stopPropagation();
++            if (document.getElementById('oa-btn-clear')) document.getElementById('oa-btn-clear').click();
++        };
++
++        function getCachedManagerId(cache, name) {
++            if (!name || !cache) return null;
++            const target = name.replace(/\s+/g, '').toLowerCase();
++            for (let k in cache) {
++                if (k.replace(/\s+/g, '').toLowerCase().includes(target) || target.includes(k.replace(/\s+/g, '').toLowerCase())) {
++                    return cache[k];
++                }
++            }
++            return null;
++        }
++
++        document.getElementById('oa-ba-fill').onclick = async (e) => {
++            e.stopPropagation();
++            if (projects && projects.length > 0) {
++                let latest = JSON.parse(JSON.stringify(projects[projects.length - 1]));
++                // ?潮???鋆? managerId
++                if (latest.manager && !latest.managerId) {
++                    const res = await chrome.storage.local.get(['oa_manager_cache']);
++                    const mId = getCachedManagerId(res.oa_manager_cache, latest.manager);
++                    if (mId) latest.managerId = mId;
++                }
++                let msg = { type: "OA_LINK_FILL", project: latest };
++                window.postMessage(msg, "*");
++                const bc = (win) => { for (let i = 0; i < win.frames.length; i++) { try { win.frames[i].postMessage(msg, "*"); bc(win.frames[i]); } catch (e) { } } };
++                bc(window);
++                alert("??撌脩?刻?‵撖怠?銵其葉??啁??嚗? + latest.label);
++            } else {
++                alert("?? 撠靽?隞颱????");
++            }
++        };
+     }
+ 
+     function bindEvents() {
+         document.getElementById('oa-btn-refresh').onclick = syncData;
+         document.getElementById('oa-panel-close').onclick = () => panel.classList.remove('open');
+-        document.getElementById('btn-quick-save').onclick = () => document.getElementById('btn-f-save').click();
++
++        // 敹恍‵?極?瑕?
++        document.getElementById('oa-btn-undo').onclick = () => {
++            if (lastBackup) {
++                const msg = { type: "OA_LINK_FILL", project: { label: "?Ｗ儔?遢", details: [], ...lastBackup } };
++                window.postMessage(msg, "*");
++                const bc = (win) => { for (let i = 0; i < win.frames.length; i++) { try { win.frames[i].postMessage(msg, "*"); bc(win.frames[i]); } catch (e) { } } };
++                bc(window);
++            } else {
++                alert("?? 撠?舀敺拍??遢");
++            }
++        };
++        document.getElementById('oa-btn-clear').onclick = () => {
++            window.postMessage({ type: "OA_LINK_CLEAR" }, "*");
++            const bc = (win) => { for (let i = 0; i < win.frames.length; i++) { try { win.frames[i].postMessage({ type: "OA_LINK_CLEAR" }, "*"); bc(win.frames[i]); } catch (e) { } } };
++            bc(window);
++        };
++
++        // 敹急撌亙??隞?+        document.getElementById('oa-btn-add').onclick = () => { resetForm(); tabManage.click(); };
++        document.getElementById('oa-btn-save').onclick = () => document.getElementById('btn-f-save').click();
++        document.getElementById('oa-btn-export').onclick = () => document.getElementById('btn-f-export').click();
++        document.getElementById('oa-btn-import').onclick = () => document.getElementById('btn-f-import').click();
+         const tabFill = document.getElementById('tab-v-fill'), tabManage = document.getElementById('tab-v-manage');
+         const viewFill = document.getElementById('view-v-fill'), viewManage = document.getElementById('view-v-manage');
+         tabFill.onclick = () => { tabFill.classList.add('active'); tabManage.classList.remove('active'); viewFill.classList.remove('hidden'); viewManage.classList.add('hidden'); };
+@@ -241,6 +455,20 @@
+         };
+ 
+         document.getElementById('btn-add-detail').onclick = () => addDetailRow();
++
++        function exportToCSV() {
++            const h = ["?璅?", "?拇平?迂", "?勗蝺刻?", "?蝬?", "??批捆", "蝡???", "??蝮賢", "?勗敶Ｗ?", "?∟頃憿", "撟?車", "?踹??, "?勗?批捆", "?敦撟?車", "??", "?隢??, "???勗", "?刻??", "銝剜??砍", "??撟?車", "????"];
++            const rows = [];
++            projects.forEach(p => {
++                (p.details || [{}]).forEach(dt => {
++                    const row = [p.label, p.propertyName, p.reportNo, p.manager, p.projectContent, p.budget, p.total, p.quoteType, p.buyType, p.currency, dt.vendorName, dt.content, dt.detailCurrency, dt.amount, p.inviteCount, p.replyCount, p.reason, p.winnerName, p.contractCurrency, p.contractAmount];
++                    rows.push(row.map(v => `"${(String(v || '')).replace(/"/g, '""')}"`).join(","));
++                });
++            });
++            const b = new Blob(["\uFEFF" + h.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8' });
++            const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `OA_Projects_${Date.now()}.csv`; a.click();
++        }
++
+         document.getElementById('btn-f-save').onclick = async () => {
+             const id = document.getElementById('in-f-id').value || "p_" + Date.now();
+             const p = { id: id, managerId: document.getElementById('in-f-managerId').value, details: [] };
+@@ -260,20 +488,26 @@
+             alert("??靽???"); syncData(); tabFill.click(); resetForm();
+         };
+ 
+-        document.getElementById('btn-f-cancel').onclick = () => { resetForm(); tabFill.click(); };
+-        document.getElementById('btn-f-export').onclick = () => {
+-            const h = ["?璅?", "?拇平?迂", "?勗蝺刻?", "?蝬?", "??批捆", "蝡???", "??蝮賢", "?勗敶Ｗ?", "?∟頃憿", "撟?車", "?踹??, "?勗?批捆", "?敦撟?車", "??", "?隢??, "???勗", "?刻??", "銝剜??砍", "??撟?車", "????"];
+-            const rows = [];
+-            projects.forEach(p => {
+-                (p.details || [{}]).forEach(dt => {
+-                    const row = [p.label, p.propertyName, p.reportNo, p.manager, p.projectContent, p.budget, p.total, p.quoteType, p.buyType, p.currency, dt.vendorName, dt.content, dt.detailCurrency, dt.amount, p.inviteCount, p.replyCount, p.reason, p.winnerName, p.contractCurrency, p.contractAmount];
+-                    rows.push(row.map(v => `"${(String(v || '')).replace(/"/g, '""')}"`).join(","));
++        document.getElementById('btn-f-save-as-new').onclick = async () => {
++            const p = { id: "p_" + Date.now(), managerId: document.getElementById('in-f-managerId').value, details: [] };
++            fields.forEach(f => { if (inputs[f]) p[f] = inputs[f].value.trim(); });
++            document.querySelectorAll('.oa-detail-row').forEach(row => {
++                p.details.push({
++                    vendorName: row.querySelector('.dt-vendor').value.trim(),
++                    content: row.querySelector('.dt-content').value.trim(),
++                    detailCurrency: row.querySelector('.dt-currency').value,
++                    amount: row.querySelector('.dt-amount').value.trim()
+                 });
+             });
+-            const b = new Blob(["\uFEFF" + h.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8' });
+-            const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `OA_Projects_${Date.now()}.csv`; a.click();
++            if (!p.label || p.details.length === 0) return alert("敹‵?撩憭梧?");
++            projects.push(p);
++            await chrome.storage.local.set({ 'oa_projects_v13': projects });
++            alert("??撌脣摮?圈???); syncData(); tabFill.click(); resetForm();
+         };
+ 
++        document.getElementById('btn-f-cancel').onclick = () => { resetForm(); tabFill.click(); };
++        document.getElementById('btn-f-export').onclick = () => exportToCSV();
++
+         const fileIn = document.getElementById('in-f-file');
+         document.getElementById('btn-f-import').onclick = () => fileIn.click();
+         fileIn.onchange = (e) => {
+@@ -337,6 +571,20 @@
+ 
+                 const imported = Object.values(grouped);
+                 if (imported.length > 0) {
++                    const res = await chrome.storage.local.get(['oa_manager_cache']);
++                    const cache = res.oa_manager_cache || {};
++                    imported.forEach(p => {
++                        if (p.manager && !p.managerId) {
++                            const target = p.manager.replace(/\s+/g, '').toLowerCase();
++                            for (let k in cache) {
++                                if (k.replace(/\s+/g, '').toLowerCase().includes(target) || target.includes(k.replace(/\s+/g, '').toLowerCase())) {
++                                    p.managerId = cache[k];
++                                    break;
++                                }
++                            }
++                        }
++                    });
++
+                     projects = imported;
+                     await chrome.storage.local.set({ 'oa_projects_v13': projects });
+                     alert(`?????臬 ${imported.length} ???害);
+@@ -350,29 +598,100 @@
+         };
+     }
+ 
+-    async function syncData() { const res = await chrome.storage.local.get(['oa_projects_v13']); projects = res.oa_projects_v13 || []; renderList(); }
++    async function syncData() {
++        const res = await chrome.storage.local.get(['oa_projects_v13']);
++        projects = res.oa_projects_v13 || [];
++        // ?冽?甈∪?甇仿＊蝷箏?嚗??活?⊥迤銝銝?翰?? managerId
++        const cacheRes = await chrome.storage.local.get(['oa_manager_cache']);
++        const cache = cacheRes.oa_manager_cache || {};
++        let modified = false;
++        projects.forEach(p => {
++            if (p.manager && !p.managerId) {
++                const target = p.manager.replace(/\s+/g, '').toLowerCase();
++                for (let k in cache) {
++                    if (k.replace(/\s+/g, '').toLowerCase().includes(target) || target.includes(k.replace(/\s+/g, '').toLowerCase())) {
++                        p.managerId = cache[k];
++                        modified = true;
++                        break;
++                    }
++                }
++            }
++        });
++        if (modified) await chrome.storage.local.set({ 'oa_projects_v13': projects });
++
++        const searchInput = document.getElementById('oa-search-input');
++        renderList(searchInput ? searchInput.value.trim() : "");
++    }
+ 
+-    function renderList() {
++    function renderList(query = "") {
+         const list = document.getElementById('oa-disp-list'); if (!list) return;
+-        list.innerHTML = projects.length === 0 ? '<p style="padding:40px;">撠閮?</p>' : '';
+-        projects.forEach(p => {
++
++        let filtered = projects;
++        if (query) {
++            const q = query.toLowerCase();
++            filtered = projects.filter(p =>
++                (p.label && p.label.toLowerCase().includes(q)) ||
++                (p.manager && p.manager.toLowerCase().includes(q)) ||
++                (p.vendorName && p.vendorName.toLowerCase().includes(q))
++            );
++        }
++
++        list.innerHTML = filtered.length === 0 ? `<p style="padding:40px; color:#999; text-align:center;">${query ? '?曆??啣???? : '撠閮?'}</p>` : '';
++        filtered.forEach(p => {
+             const div = document.createElement('div'); div.className = 'oa-p-item';
+-            div.innerHTML = `<div style="display:flex; justify-content:space-between;"><div><strong>${p.label}</strong><br><small>${p.manager || ''}</small></div><div class="edit-btn">??/div></div>`;
+-            div.onclick = () => { console.log("Filling Project:", p); runFill(p); };
++            div.innerHTML = `
++                <div style="display:flex; justify-content:space-between; align-items:center;">
++                    <div style="flex:1;"><strong>${p.label}</strong></div>
++                    <div style="display:flex; gap:8px;">
++                        <div class="edit-btn" style="cursor:pointer; padding:2px 5px;">??/div>
++                        <div class="del-btn" style="cursor:pointer; padding:2px 5px;">??儭?/div>
++                    </div>
++                </div>`;
++            div.querySelector('div[style*="flex:1"]').onclick = () => { console.log("Filling Project:", p); runFill(p); };
+             div.querySelector('.edit-btn').onclick = (e) => {
+                 e.stopPropagation(); document.getElementById('in-f-id').value = p.id; document.getElementById('in-f-managerId').value = p.managerId || "";
+                 fields.forEach(f => { if (inputs[f]) inputs[f].value = p[f] || ""; });
+                 const dList = document.getElementById('oa-detail-list'); dList.innerHTML = "";
+                 if (p.details) p.details.forEach(dt => addDetailRow(dt));
+-                document.getElementById('tab-v-manage').click(); document.getElementById('btn-f-save').textContent = "?湔?"; document.getElementById('btn-f-cancel').classList.remove('hidden');
++                document.getElementById('tab-v-manage').click(); document.getElementById('btn-f-save').textContent = "?湔?";
++                document.getElementById('btn-f-cancel').classList.remove('hidden');
++                document.getElementById('btn-f-save-as-new').classList.remove('hidden');
+                 syncManagerFeedback(p.manager);
+             };
++            div.querySelector('.del-btn').onclick = async (e) => {
++                e.stopPropagation();
++                if (confirm(`??儭?蝣箏??芷??{p.label}??嚗)) {
++                    projects = projects.filter(x => x && x.id !== p.id);
++                    await chrome.storage.local.set({ 'oa_projects_v13': projects });
++                    syncData();
++                }
++            };
+             list.appendChild(div);
+         });
+     }
+ 
+-    function runFill(p) {
+-        const msg = { type: "OA_LINK_FILL", project: JSON.parse(JSON.stringify(p)) };
++    async function runFill(p) {
++        // ??隞賜???+        const fieldIds = ['field1366311', 'field1366312', 'field1366309', 'field1366275', 'field1366310', 'field1366280', 'field1366276', 'field1366278', 'field1366279', 'field1366290', 'field1366291', 'field1366292', 'field1366313', 'field1366294', 'field1366295'];
++        const bak = {};
++        fieldIds.forEach(id => { const e = document.getElementById(id) || document.querySelector(`[name="${id}"]`); if (e) bak[id] = e.value; });
++        lastBackup = bak;
++
++        const projCopy = JSON.parse(JSON.stringify(p));
++        // ??鋆?敹怠???managerId
++        if (projCopy.manager && !projCopy.managerId) {
++            const res = await chrome.storage.local.get(['oa_manager_cache']);
++            const cache = res.oa_manager_cache || {};
++            const target = projCopy.manager.replace(/\s+/g, '').toLowerCase();
++            for (let k in cache) {
++                if (k.replace(/\s+/g, '').toLowerCase().includes(target) || target.includes(k.replace(/\s+/g, '').toLowerCase())) {
++                    projCopy.managerId = cache[k];
++                    break;
++                }
++            }
++        }
++
++        const msg = { type: "OA_LINK_FILL", project: projCopy };
+         window.postMessage(msg, "*");
+         const bc = (win) => { for (let i = 0; i < win.frames.length; i++) { try { win.frames[i].postMessage(msg, "*"); bc(win.frames[i]); } catch (e) { } } };
+         bc(window);
+@@ -382,7 +701,9 @@
+         document.getElementById('in-f-id').value = ""; document.getElementById('in-f-managerId').value = "";
+         fields.forEach(f => { if (inputs[f]) inputs[f].value = (f === 'currency' || f === 'contractCurrency') ? '0' : ''; });
+         document.getElementById('oa-detail-list').innerHTML = ""; addDetailRow();
+-        document.getElementById('btn-f-save').textContent = "?脣??"; document.getElementById('btn-f-cancel').classList.add('hidden');
++        document.getElementById('btn-f-save').textContent = "?脣??";
++        document.getElementById('btn-f-cancel').classList.add('hidden');
++        document.getElementById('btn-f-save-as-new').classList.add('hidden');
+         document.getElementById('in-f-manager').style.backgroundColor = "";
+     }
+ 
+@@ -390,36 +711,102 @@
+         if (!name) return;
+         const res = await chrome.storage.local.get(['oa_manager_cache']);
+         const cache = res.oa_manager_cache || {};
+-        if (cache[name.trim()]) {
++        const target = name.replace(/\s+/g, '').toLowerCase();
++        let matchedId = null;
++        for (let k in cache) {
++            if (k.replace(/\s+/g, '').toLowerCase().includes(target) || target.includes(k.replace(/\s+/g, '').toLowerCase())) {
++                matchedId = cache[k];
++                break;
++            }
++        }
++
++        if (matchedId) {
+             document.getElementById('in-f-manager').style.backgroundColor = "#e8f5e9";
+-            document.getElementById('in-f-managerId').value = cache[name.trim()];
++            document.getElementById('in-f-managerId').value = matchedId;
++            // ??嚗??單??寥??啁? ID 擃神????桐葉嚗??閬??拇活?脣?
++            let modified = false;
++            projects.forEach(p => {
++                const pt = (p.manager || "").replace(/\s+/g, '').toLowerCase();
++                if ((pt.includes(target) || target.includes(pt)) && (!p.managerId || p.managerId !== matchedId)) {
++                    p.managerId = matchedId;
++                    modified = true;
++                }
++            });
++            if (modified) {
++                await chrome.storage.local.set({ 'oa_projects_v13': projects });
++            }
+         } else {
+             document.getElementById('in-f-manager').style.backgroundColor = "";
+         }
+     }
+ 
++    // ?嗅摮??潛?霈???憒???oa_manager_cache 鋡急?唬? (靘?銝餉?蝒??訾??曉之??
++    chrome.storage.onChanged.addListener((changes, namespace) => {
++        if (namespace === 'local' && changes.oa_manager_cache) {
++            const currentManagerName = document.getElementById('in-f-manager')?.value;
++            if (currentManagerName) syncManagerFeedback(currentManagerName);
++            // 霈??航??舀?唬?甈?projects ??managerId
++            syncData();
++        }
++    });
++
+     function startPickerWatcher() {
+-        setInterval(() => {
+-            async function checkPicker(win) {
+-                try {
+-                    const val = win.document.getElementById('field1366309'), span = win.document.getElementById('field1366309span');
+-                    if (val && val.value && span && span.innerText.trim()) {
+-                        const name = span.innerText.trim(), id = val.value;
+-                        const nameIn = document.getElementById('in-f-manager'), idIn = document.getElementById('in-f-managerId');
++        // ?芸?嚗蝙??MutationObserver ??葫 DOM 霈?嚗?撠蝜憚閰Ｙ? CPU 瘨?+        const observeFrame = (win) => {
++            try {
++                const target = win.document.getElementById('field1366309span');
++                if (!target) return;
++
++                const observer = new MutationObserver(async () => {
++                    const valEl = win.document.getElementById('field1366309');
++                    const spanEl = win.document.getElementById('field1366309span');
++                    if (valEl && valEl.value && spanEl && spanEl.innerText.trim()) {
++                        const name = spanEl.innerText.trim();
++                        const id = valEl.value;
++                        const nameIn = document.getElementById('in-f-manager');
++                        const idIn = document.getElementById('in-f-managerId');
++
+                         if (nameIn && nameIn.value !== name) {
+-                            nameIn.value = name; idIn.value = id; console.log("OA Bubble: Manager Cached ->", name, id);
++                            nameIn.value = name;
++                            idIn.value = id;
+                             const res = await chrome.storage.local.get(['oa_manager_cache']);
+-                            const cache = res.oa_manager_cache || {}; cache[name] = id;
++                            const cache = res.oa_manager_cache || {};
++                            cache[name] = id;
+                             await chrome.storage.local.set({ 'oa_manager_cache': cache });
+                             nameIn.style.backgroundColor = "#e8f5e9";
+-                            return true;
++
++                            // 銝餃?閫貊?典???湔嚗?甇文?蝬?????????脣? ID
++                            const target = name.replace(/\s+/g, '').toLowerCase();
++                            let modified = false;
++                            projects.forEach(p => {
++                                const pt = (p.manager || "").replace(/\s+/g, '').toLowerCase();
++                                if ((pt.includes(target) || target.includes(pt)) && (!p.managerId || p.managerId !== id)) {
++                                    p.managerId = id;
++                                    modified = true;
++                                }
++                            });
++                            if (modified) {
++                                await chrome.storage.local.set({ 'oa_projects_v13': projects });
++                                syncData();
++                            }
+                         }
+                     }
+-                } catch (e) { } return false;
++                });
++                observer.observe(target, { childList: true, subtree: true, characterData: true });
++            } catch (e) { }
++        };
++
++        // ??閫撖???Frame
++        const scanFrames = (win) => {
++            observeFrame(win);
++            for (let i = 0; i < win.frames.length; i++) {
++                try { scanFrames(win.frames[i]); } catch (e) { }
+             }
+-            if (checkPicker(window)) return;
+-            for (let i = 0; i < window.frames.length; i++) { try { if (checkPicker(window.frames[i])) return; } catch (e) { } }
+-        }, 1200);
++        };
++        scanFrames(window);
++
++        // 瘥? 5 蝘炎?交?行???Frame ?Ｙ?嚗?雿??
++        setInterval(() => scanFrames(window), 5000);
+ 
+         const mgrIn = document.getElementById('in-f-manager');
+         if (mgrIn) {
+diff --git a/extension/main_bridge.js b/extension/main_bridge.js
+index 5000d8c..bfc105b 100644
+--- a/extension/main_bridge.js
++++ b/extension/main_bridge.js
+@@ -1,11 +1,11 @@
+ /**
+  * Weaver OA Main Bridge
+- * Version: 4.6.2
+- * ?詨??嚗?芸?憓?銵?+ 瘛勗漲靽桀儔鈭箏?詨???(e8_browser) 憛怠?
++ * Version: 4.7.1
++ * ?詨??嚗?芸?憓?銵?+ 撘瑕??犖?⊿? (e8_browser) 瘛勗漲?神??蝒???  */
+ 
+ (function () {
+-    console.log("%cOA Bridge v4.6.2: Active.", "color:white; background:#00BCD4; padding:2px 5px; border-radius:3px;");
++    console.log("%cOA Bridge v4.7.1: Power Active.", "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
+ 
+     window.addEventListener("message", function (event) {
+         if (!event.data || event.data.type !== "OA_LINK_FILL") return;
+@@ -13,12 +13,15 @@
+         const data = event.data.project;
+         if (!data) return;
+ 
++        // ?函??怠?嚗?敶?頝臬?餈質馱
++        window.__OA_LAST_PROJECT = data;
++
+         const hasTargets = ['field1366311', 'field1366275', 'field1366310'].some(id => !!(document.getElementById(id) || document.querySelector('[name="' + id + '"]')));
+         if (!hasTargets) return;
+ 
+-        console.log("OA Bridge: Filling Data for " + data.label, data);
++        console.log("OA Bridge: Power Filling for " + data.label, data);
+ 
+-        // 1. 憛怠?銝餉” (?憓撥?犖??ID ??)
++        // 1. 憛怠?銝餉” (?瘛勗漲?神?摩)
+         const staticMap = {
+             'field1366311': data.propertyName, 'field1366312': data.reportNo, 'field1366309': data.manager,
+             'field1366275': data.projectContent, 'field1366310': data.total, 'field1366280': data.budget,
+@@ -27,12 +30,26 @@
+             'field1366313': data.winnerName, 'field1366294': data.contractAmount, 'field1366295': data.contractCurrency
+         };
+         for (let id in staticMap) {
+-            // ?喲? managerId 靘犖?⊥?雿蝙??             const mId = (id === 'field1366309') ? data.managerId : null;
+             fillField(id, staticMap[id], mId);
+         }
+ 
+-        // 2. 憛怠??敦??甇亥???+        // 2. 頛閫貊嚗鈭箏甈?隞征嚗?.5蝘??芸?暺??曉之?∟孛?澆?蝒?撖?(?Ｗ儔?遢?歲??
++        if (data.label !== "?Ｗ儔?遢") {
++            setTimeout(() => {
++                const mField = document.getElementById('field1366309');
++                // ?亙歇蝬?鈭??? managerId嚗停銝?閬????蝒?+                if (mField && (!mField.value || mField.value === "")) {
++                    const btn = document.getElementById('field1366309_browserbtn');
++                    if (btn) {
++                        console.log("OA Bridge: Still empty, launching picker assistant...");
++                        btn.click();
++                    }
++                }
++            }, 1000);
++        }
++
++        // 3. 憛怠??敦??甇亥???         if (data.details && data.details.length > 0) {
+             (async function () {
+                 const requiredCount = data.details.length;
+@@ -74,6 +91,28 @@
+         }
+     });
+ 
++    window.addEventListener("message", function (event) {
++        if (!event.data || event.data.type !== "OA_LINK_CLEAR") return;
++        console.log("OA Bridge: Clearing all fields...");
++        clearAllFields();
++    });
++
++    function clearAllFields() {
++        const ids = ['field1366311', 'field1366312', 'field1366309', 'field1366275', 'field1366310', 'field1366280', 'field1366276', 'field1366278', 'field1366279', 'field1366290', 'field1366291', 'field1366292', 'field1366313', 'field1366294', 'field1366295'];
++        ids.forEach(id => fillField(id, ""));
++
++        // 皜??敦銵?+        let idx = 0;
++        while (document.getElementById(`field1366286_${idx}`)) {
++            fillField(`field1366286_${idx}`, "");
++            fillField(`field1366287_${idx}`, "");
++            fillField(`field1366289_${idx}`, "");
++            const chk = findCheckboxForRow(idx);
++            if (chk && !chk.checked) chk.click();
++            idx++;
++        }
++    }
++
+     function findActionBtnAcrossFrames(win, type) {
+         const id = type === 'add' ? 'addbutton0' : 'delbutton0';
+         const selectors = [`#${id}`, `[name="${id}"]`, `[id^="${id.slice(0, -1)}"]`, type === 'add' ? 'input[onclick*="addRow"]' : 'input[onclick*="deleteRow"]'];
+@@ -96,6 +135,8 @@
+         const el = document.getElementById(id) || document.querySelector('[name="' + id + '"]');
+         if (!el) return;
+ 
++        const isBrowser = (id === 'field1366309') || el.classList.contains('e8_browser') || !!document.getElementById(id + 'span');
++
+         // ??銝??詨
+         if (el.tagName === 'SELECT') {
+             let ok = "";
+@@ -103,37 +144,138 @@
+             if (ok !== "") el.value = ok;
+         } else {
+             // ???桅撓?交??犖??ID
+-            if (mId && id === 'field1366309') {
+-                el.value = mId; // 憛怠?迤?頂蝯?ID
+-            } else {
+-                el.value = val || "";
+-            }
++            const finalVal = (mId && isBrowser) ? mId : (val || "");
++            el.value = finalVal;
++
++            // ?詨?靽格迤嚗???敺?OA ??銝?蝺??雿?(憒?field1366309__)
++            const elShow = document.getElementById(id + '__') || document.querySelector('[name="' + id + '__"]');
++            if (elShow) elShow.value = finalVal;
+         }
+ 
+-        // ?詨?嚗楛摨虫耨敺拐犖?? (Browser 甈?) ?＊蝷箇???-        if (id === 'field1366309') {
++        // 憒??臭犖?⊿?嚗?閰衣憭車?孵??神?豢??＊蝷?+        if (isBrowser) {
+             const displayVal = val || "";
+-            // 1. ?湔 Span 憿舐內?批捆
++            // 1. ?湔憿舐內摰孵 (?詨?嚗eaver OA ?犖?⊿＊蝷?
+             const spans = [id + 'span', id + '_span', id + 'spanimg'];
+             spans.forEach(sid => {
+                 const s = document.getElementById(sid);
+                 if (s) {
+-                    s.innerHTML = '<span class="e8_showNameClass"><a href="javascript:void(0);">' + displayVal + '</a><span class="e8_delClass" onclick="clearFullbrow(' + id.replace('field', '') + ')"> x </span></span>';
+-                    s.style.display = (displayVal === "") ? "" : "inline-block";
++                    if (displayVal === "") { s.innerHTML = ""; s.style.display = "none"; }
++                    else {
++                        // 瑽遣?頂蝯勗????其??渡? HTML 蝯?
++                        s.innerHTML = `<span class="e8_showNameClass"><a href="javascript:void(0)" onclick="return false;">${displayVal}</a><span class="e8_delClass" style="visibility:visible; cursor:pointer;" onclick="if(window.clearFullbrow) window.clearFullbrow('${id.replace('field', '')}', '${id}span', '1');"> x </span></span>`;
++                        s.style.display = "inline-block";
++                    }
+                 }
+             });
+-            // 2. 蝘駁 OA ??憛怨郎????
+-            const img = document.getElementById(id + 'spanimg');
+-            if (img) img.style.display = 'none';
++            if (displayVal !== "") {
++                const img = document.getElementById(id + 'spanimg'); if (img) img.style.display = 'none';
++            }
++
++            // 2. 瘛勗?岫嚗矽??OA ???神?賣 (????????頂蝯?
++            try {
++                const fieldNum = id.replace('field', '');
++                // ?岫撣貊??OA ?豢??‵暺??
++                if (mId && displayVal) {
++                    if (window._writeBackData) window._writeBackData(id, displayVal, mId);
++                    else if (window._writeBackBrowser) window._writeBackBrowser(id, displayVal, mId);
++                }
++            } catch (e) { }
+         }
+ 
+-        // 閫貊 OA ?折?摩
++        // 閫貊 OA ?折?⊿???頛臬?甇?         try {
+-            if (window.wfbrowvaluechange) window.wfbrowvaluechange(el, id.replace('field', ''));
+-            if (window.checkinput2) window.checkinput2(id, id + 'span', el.getAttribute('viewtype') || '1');
+-        } catch (e) { }
++            // ?岫閫貊蝟餌絞????value 霈??矽
++            const fieldNum = id.replace('field', '');
++            if (window.wfbrowvaluechange) window.wfbrowvaluechange(el, fieldNum);
++            if (window.checkinput2) {
++                const viewType = el.getAttribute('viewtype') || '1';
++                window.checkinput2(id, id + 'span', viewType);
++            }
++        } catch (e) { console.warn("OA Bridge: Validation Trigger Error ->", e); }
+ 
+         // 閫貊璅?鈭辣
+-        ['change', 'input', 'blur'].forEach(t => el.dispatchEvent(new Event(t, { bubbles: true })));
++        ['change', 'input', 'blur'].forEach(t => {
++            const ev = new Event(t, { bubbles: true });
++            el.dispatchEvent(ev);
++            const elShow = document.getElementById(id + '__');
++            if (elShow) elShow.dispatchEvent(ev);
++        });
++    }
++
++    /**
++     * ?啣?嚗楛摨衣?批?蝒蒂?芸?暺??格?
++     */
++    function autoClickPickerTarget() {
++        setInterval(() => {
++            const data = window.__OA_LAST_PROJECT;
++            if (!data || !data.manager) return;
++            const targetName = data.manager.replace(/\s+/g, '').toLowerCase();
++
++            function searchAndClick(win) {
++                try {
++                    const fDoc = win.document;
++                    if (!fDoc) return false;
++
++                    // 撌脰?????蝐歹??脫迫???恍??銴?雿?+                    if (fDoc.body && fDoc.body.getAttribute('oa-processed')) return true;
++
++                    // 1. 摰儔?格??交嚗撖祆?撠?隞塚??駁??征?質???嚗?撠神嚗?+                    const elements = Array.from(fDoc.querySelectorAll('td, span, a, div.e8_browser_item'));
++                    const targetEl = elements.find(el => {
++                        if (el.children.length > 2) return false; // ?頞之摰孵
++                        const txt = (el.innerText || "").replace(/\s+/g, '').toLowerCase();
++                        if (!txt) return false;
++                        // ??格???嚗?摮銝?撌桀云憭?(?脣?)
++                        return (txt.includes(targetName) || targetName.includes(txt)) && txt.length <= targetName.length + 10 && txt.length > 1;
++                    });
++
++                    if (targetEl) {
++                        console.log("OA Bridge: Picker Found Power Target ->", targetEl.innerText.trim());
++                        fDoc.body.setAttribute('oa-processed', 'true');
++
++                        const row = targetEl.closest('tr') || targetEl;
++
++                        // 2. 璅⊥暺?嚗???桅嚗eaver 撣賊??? (dbclick) ??暺?敺? OK
++                        row.click();
++                        // 閫貊??嚗?憭?蝒???訾葉銝阡???+                        const dblEvent = new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: win });
++                        row.dispatchEvent(dblEvent);
++
++                        // 3. ??寞?嚗??整Ⅱ摰???+                        setTimeout(() => {
++                            try {
++                                const btns = Array.from(fDoc.querySelectorAll('button, input[type="button"]'));
++                                const okBtn = btns.find(b => b.value?.includes('蝣箏?') || b.innerText?.includes('蝣箏?') || b.id === 'btnok');
++                                if (okBtn) {
++                                    okBtn.click();
++                                    // ?岫隤輻 Weaver OA ?航摮?撅?矽?賣
++                                    if (win.doCallback) win.doCallback();
++                                    else if (win.opener && win.opener.doCallback) win.opener.doCallback();
++                                }
++                            } catch (e) { }
++                        }, 500);
++                        return true;
++                    }
++
++                    // 憒???撅斗銝嚗?餈湔鋆⊿??iframe
++                    for (let i = 0; i < win.frames.length; i++) {
++                        if (searchAndClick(win.frames[i])) return true;
++                    }
++                } catch (e) { }
++                return false;
++            }
++
++            // ???? (??敶撠店獢葉??撅?DialogFrame)
++            const frames = Array.from(document.querySelectorAll('iframe[id*="DialogFrame"]'));
++            frames.forEach(frame => {
++                try {
++                    if (frame.contentWindow) searchAndClick(frame.contentWindow);
++                } catch (e) { }
++            });
++
++        }, 800);
+     }
++
++    autoClickPickerTarget();
+ })();
+diff --git a/extension/manifest.json b/extension/manifest.json
+index 85f6038..47a0963 100644
+--- a/extension/manifest.json
++++ b/extension/manifest.json
+@@ -1,7 +1,7 @@
+ {
+   "manifest_version": 3,
+   "name": "?∟頃蝡??芸??極??,
+-  "version": "4.6.2",
++  "version": "4.7.1",
+   "description": "?芸?憛怠神瘜凝 OA ?∟頃蝡?瘚?銵典",
+   "permissions": [
+     "activeTab",
+diff --git a/extension/popup.html b/extension/popup.html
+index 63e2ec6..e5ded5a 100644
+--- a/extension/popup.html
++++ b/extension/popup.html
+@@ -3,170 +3,231 @@
+ 
+ <head>
+     <meta charset="UTF-8">
+-    <title>OA ?芸?憛怠神</title>
+-    <link rel="stylesheet" href="styles.css">
++    <title>?∟頃銝?菟?- 敶???/title>
++    <link rel="stylesheet" href="content.css">
++    <style>
++        /* 閬神?典??豢筑?Ｘ??撠?雿??啣蔣嚗蝙?園??Popup ?箏?憭批? */
++        body {
++            margin: 0;
++            padding: 0;
++            width: 360px;
++            /* ?箏?敶?撖砍漲 */
++            max-height: 600px;
++            overflow-y: auto;
++            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
++            background-color: #f7f9fc;
++        }
++
++        #oa-side-panel {
++            /* 蝘駁?箏?摰??敶梁?嚗蝙?嗉?嗆???*/
++            position: static;
++            width: 100%;
++            height: auto;
++            box-shadow: none;
++            border-radius: 0;
++            transform: none !important;
++            transition: none !important;
++            margin: 0;
++            display: flex;
++            /* Ensure it is displayed, ignoring content.js hide logic */
++            visibility: visible;
++        }
++
++        #oa-panel-header {
++            /* ?梯?????嚗?敶?銝?閬?*/
++        }
++
++        #oa-panel-close {
++            display: none !important;
++        }
++
++        /* 敺株矽頛詨獢??脫迫?典?蝒鋡急?憯?*/
++        .oa-p-group input,
++        .oa-p-group textarea,
++        .oa-p-group select {
++            box-sizing: border-box;
++            width: 100%;
++        }
++
++        /* ?脫迫?敦銵?斗?????*/
++        .oa-detail-row {
++            padding-right: 25px !important;
++        }
++    </style>
+ </head>
+ 
+ <body>
+-    <div class="container">
+-        <header>
+-            <h1>?∟頃蝡??芸???/h1>
+-            <div class="tabs">
+-                <button id="tab-fill" class="tab-btn active">憛怠??豢?</button>
+-                <button id="tab-manage" class="tab-btn">蝞∠??</button>
+-            </div>
+-        </header>
+ 
+-        <div id="view-fill" class="view">
+-            <div class="action-bar" style="display: flex; gap: 8px; margin-bottom: 12px;">
+-                <button id="btn-undo" class="secondary-btn" style="flex: 1;" title="?Ｗ儔?啣‵??????>?抬? ?Ｗ儔銝?甇?/button>
+-                <button id="btn-clear" class="secondary-btn" style="flex: 1;" title="皜征???‵??雿?>?完 ??憛怠?</button>
++    <!-- 摰銴ˊ??content.js ??panel 蝯? -->
++    <div id="oa-side-panel" class="open"> <!-- ?身??open -->
++        <div id="oa-panel-header">
++            <div class="oa-header-left">
++                <div class="oa-logo">un</div>
++                <div class="oa-title-group">
++                    <span style="font-size:16px;">?</span>
++                    <span>?∟頃銝?菟?/span>
++                    <span style="font-size:10px; opacity:0.5;">??/span>
++                </div>
+             </div>
+-            <p class="hint">隢????隞仿?憪‵??</p>
+-            <div id="vendor-list" class="vendor-list">
+-                <!-- ??JS ???? -->
++            <div class="oa-header-right">
++                <span class="oa-header-icon" title="?游?閮剔蔭">繚繚繚</span>
++                <span class="oa-header-icon" id="oa-btn-refresh" title="?郊?豢?">??/span>
++                <span class="oa-header-icon close" id="oa-panel-close" title="?梯?閬?">??/span>
+             </div>
+         </div>
+ 
+-        <!-- 蝞∠?? -->
+-        <div id="view-manage" class="view hidden">
+-            <div class="form-container">
+-                <h3 id="form-title">?啣??</h3>
+-                <input type="hidden" id="edit-id">
+-                <div class="input-grid">
+-                    <div class="input-group">
+-                        <label>?璅? (憿舐內??</label>
+-                        <input type="text" id="input-label" placeholder="靘?: 靽⊥? - ?餃??">
+-                    </div>
+-                    <div class="input-group">
+-                        <label>?拇平?迂</label>
+-                        <input type="text" id="input-propertyName" placeholder="靘?: 銋????撱?>
+-                    </div>
+-                </div>
++        <div class="oa-action-toolbar"
++            style="padding:10px 15px; display:flex; gap:6px; background:#fff; border-bottom:1px solid #eee;">
++            <button class="oa-tool-btn" id="oa-btn-add" title="?啣??"
++                style="flex:1; padding:6px 0; border:1px solid #764ba2; color:#764ba2; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">?啣?</button>
++            <button class="oa-tool-btn" id="oa-btn-import" title="?臬 CSV"
++                style="flex:1; padding:6px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">?臬</button>
++            <button class="oa-tool-btn" id="oa-btn-export" title="?臬 CSV"
++                style="flex:1; padding:6px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">?臬</button>
++            <button class="oa-tool-btn" id="oa-btn-save" title="靽??嗅?"
++                style="flex:1.2; padding:6px 0; border:none; color:#fff; background:linear-gradient(135deg, #764ba2 0%, #667eea 100%); border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">靽?</button>
++        </div>
+ 
+-                <div class="input-grid">
+-                    <div class="input-group">
+-                        <label>蝢??勗蝺刻?</label>
+-                        <input type="text" id="input-reportNo" placeholder="靘?: MS/Q1241/24/kp">
+-                    </div>
+-                    <div class="input-group">
+-                        <label>?蝬?</label>
+-                        <div class="oa-style-input">
+-                            <input type="text" id="input-manager" placeholder="隢???湔憭折?詨?">
+-                            <input type="hidden" id="input-manager-id">
+-                            <button id="btn-oa-manager-pick" class="oa-picker-btn" title="敺?OA 蝬脤??詨?鈭箏">??</button>
+-                        </div>
+-                    </div>
+-                </div>
++        <div class="oa-p-tabs">
++            <div class="oa-p-tab active" id="tab-v-fill">敹恍‵??/div>
++            <div class="oa-p-tab" id="tab-v-manage">?蝞∠?</div>
++        </div>
+ 
+-                <div class="input-group">
+-                    <label>??批捆 (憭扳?摮?)</label>
+-                    <textarea id="input-projectContent" rows="3" placeholder="靘?: ?餃????隞嗅??></textarea>
++        <div id="view-v-fill" class="oa-panel-body">
++            <div class="oa-section-header" style="display:flex; justify-content:space-between; align-items:center;">
++                <div class="oa-section-title">?? 憛怠??”</div>
++                <div class="oa-search-box" style="margin-left:auto;">
++                    <input type="text" id="oa-search-input" placeholder="???????.."
++                        style="width:120px; padding:4px 8px; border-radius:12px; border:1px solid #ddd; font-size:12px; outline:none;">
+                 </div>
++            </div>
++            <!-- ?啣?嚗翰?‵?????極?瑟? -->
++            <div class="oa-fill-toolbar" style="padding:0 10px 10px 10px; display:flex; gap:8px;">
++                <button id="oa-btn-undo" class="oa-tool-btn"
++                    style="flex:1; padding:5px; border-radius:6px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:11px;">?抬?
++                    ?Ｗ儔</button>
++                <button id="oa-btn-clear" class="oa-tool-btn"
++                    style="flex:1; padding:5px; border-radius:6px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:11px;">?完
++                    皜征</button>
++            </div>
++            <div id="oa-disp-list"></div>
++        </div>
+ 
+-                <div class="input-grid">
+-                    <div class="input-group">
+-                        <label>??蝮賢</label>
+-                        <input type="text" id="input-total" placeholder="12152.60">
+-                    </div>
+-                    <div class="input-group">
+-                        <label>?勗敶Ｗ?</label>
+-                        <select id="input-quoteType">
+-                            <option value="">-- 隢??--</option>
+-                            <option value="?勗?隢?>?勗?隢?/option>
+-                            <option value="??">??</option>
+-                            <option value="?寞??? (蝺?">?寞??? (蝺?</option>
+-                            <option value="蝥?">蝥?</option>
+-                        </select>
++        <div id="view-v-manage" class="oa-panel-body hidden">
++            <h4 id="oa-p-title" style="margin-top:0;">?啣??</h4>
++            <input type="hidden" id="in-f-id">
++            <input type="hidden" id="in-f-managerId">
++
++            <div class="oa-p-group"><label>?璅? (憿舐內??</label><input type="text" id="in-f-label"
++                    placeholder="靘?嚗縑??- ?餃??"></div>
++
++            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
++                <div class="oa-p-group"><label>?拇平?迂</label><input type="text" id="in-f-propertyName"
++                        placeholder="靘?: 銋????撱?></div>
++                <div class="oa-p-group">
++                    <label>?蝬?</label>
++                    <div style="display:flex;gap:4px;">
++                        <input type="text" id="in-f-manager" style="flex:1;" placeholder="頛詨憪????>
++                        <button id="btn-f-pick"
++                            style="padding:4px 10px; border-radius:8px; border:1px solid #ddd; cursor:pointer; background:white;">??</button>
+                     </div>
+                 </div>
++            </div>
+ 
+-                <div class="input-grid">
+-                    <div class="input-group">
+-                        <label>?∟頃憿</label>
+-                        <select id="input-buyType">
+-                            <option value="">-- 隢??--</option>
+-                            <option value="靽?蝬凋耨??">靽?蝬凋耨??</option>
+-                            <option value="靽????">靽????</option>
+-                            <option value="撌亦???">撌亦???</option>
+-                            <option value="?撌亦?">?撌亦?</option>
+-                            <option value="敺?撌亦?">敺?撌亦?</option>
+-                            <option value="?箏?鞈">?箏?鞈</option>
+-                            <option value="?嗡?">?嗡?</option>
+-                        </select>
+-                    </div>
+-                    <div class="input-group">
+-                        <label>蝡?????</label>
+-                        <input type="text" id="input-budget" placeholder="12152.60">
+-                    </div>
++            <div class="oa-p-group"><label>蝢??勗蝺刻?</label><input type="text" id="in-f-reportNo"
++                    placeholder="靘?: MS/Q1241/24/kp"></div>
++
++            <div class="oa-p-group"><label>??批捆</label><textarea id="in-f-projectContent" rows="3"
++                    placeholder="??批捆"></textarea></div>
++
++            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
++                <div class="oa-p-group"><label>??蝮賢</label><input type="text" id="in-f-total"></div>
++                <div class="oa-p-group">
++                    <label>?勗敶Ｗ?</label>
++                    <select id="in-f-quoteType">
++                        <option value="">隢??/option>
++                        <option value="?勗?隢?>?勗?隢?/option>
++                        <option value="??">??</option>
++                        <option value="?寞??? (蝺?">?寞??? (蝺?</option>
++                        <option value="蝥?">蝥?</option>
++                    </select>
+                 </div>
++            </div>
+ 
+-                <div class="input-grid">
+-                    <div class="input-group">
+-                        <label>撟?車</label>
+-                        <select id="input-currency">
+-                            <option value="HKD">HKD</option>
+-                            <option value="RMB">RMB</option>
+-                        </select>
+-                    </div>
++            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
++                <div class="oa-p-group">
++                    <label>?∟頃憿</label>
++                    <select id="in-f-buyType">
++                        <option value="">隢??/option>
++                        <option value="靽?蝬凋耨??">靽?蝬凋耨??</option>
++                        <option value="靽????">靽????</option>
++                        <option value="撌亦???">撌亦???</option>
++                        <option value="?撌亦?">?撌亦?</option>
++                        <option value="敺?撌亦?">敺?撌亦?</option>
++                        <option value="?箏?鞈">?箏?鞈</option>
++                        <option value="?嗡?">?嗡?</option>
++                    </select>
+                 </div>
++                <div class="oa-p-group"><label>蝡?????</label><input type="text" id="in-f-budget"></div>
++            </div>
+ 
+-                <div class="input-group">
+-                    <label>?踹??(敹?頛詨?砍?典?)</label>
+-                    <input type="text" id="input-vendorName" placeholder="?砍?典?">
++            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
++                <div class="oa-p-group">
++                    <label>撟?車</label>
++                    <select id="in-f-currency">
++                        <option value="0">HKD</option>
++                        <option value="1">RMB</option>
++                        <option value="2">USD</option>
++                        <option value="3">MOP</option>
++                    </select>
+                 </div>
++            </div>
+ 
+-                <div class="input-group">
+-                    <label>?勗?批捆</label>
+-                    <input type="text" id="input-content" placeholder="?∟頃/?勗?批捆">
+-                </div>
++            <div class="oa-section-title">? ?勗?敦</div>
++            <div id="oa-detail-list" style="margin-bottom:10px;"></div>
++            <button id="btn-add-detail"
++                style="width:100%; padding:8px; border:1px dashed #764ba2; color:#764ba2; background:none; border-radius:10px; cursor:pointer; margin-bottom:15px; font-weight:600;">+
++                瘛餃??敦</button>
+ 
+-                <div class="input-grid">
+-                    <div class="input-group">
+-                        <label>??</label>
+-                        <input type="text" id="input-amount" placeholder="?桃???">
+-                    </div>
+-                    <div class="input-group">
+-                        <label>?隢??(??</label>
+-                        <input type="text" id="input-inviteCount" placeholder="靘?: 1">
+-                    </div>
+-                </div>
++            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
++                <div class="oa-p-group"><label>?隢??(??</label><input type="text" id="in-f-inviteCount"></div>
++                <div class="oa-p-group"><label>???勗/?儔 (隞?</label><input type="text" id="in-f-replyCount"></div>
++            </div>
+ 
+-                <div class="input-grid">
+-                    <div class="input-group">
+-                        <label>???勗/?儔 (隞?</label>
+-                        <input type="text" id="input-replyCount" placeholder="靘?: 1">
+-                    </div>
++            <div class="oa-p-group"><label>?</label><textarea id="in-f-reason" rows="2"></textarea></div>
++            <div class="oa-p-group"><label>銝剜??砍</label><input type="text" id="in-f-winnerName"></div>
++
++            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
++                <div class="oa-p-group">
++                    <label>??撟?車</label>
++                    <select id="in-f-contractCurrency">
++                        <option value="0">HKD</option>
++                        <option value="1">RMB</option>
++                        <option value="2">USD</option>
++                        <option value="3">MOP</option>
++                    </select>
+                 </div>
++                <div class="oa-p-group"><label>????</label><input type="text" id="in-f-contractAmount"></div>
++            </div>
+ 
+-                <div class="input-group">
+-                    <label>?豢?銝剜??踹????/label>
+-                    <textarea id="input-reason" rows="2" placeholder="?刻?"></textarea>
+-                </div>
+-                <div class="form-actions">
+-                    <button id="btn-save" class="primary-btn">?脣??</button>
+-                    <button id="btn-save-as-new" class="secondary-btn hidden">?血??箸?</button>
+-                    <button id="btn-cancel" class="secondary-btn hidden">??蝺刻摩</button>
+-                </div>
+-                <div class="form-actions border-top">
+-                    <button id="btn-export" class="secondary-btn">?臬 CSV</button>
+-                    <button id="btn-import-trigger" class="secondary-btn">?臬 CSV</button>
+-                    <input type="file" id="input-import" accept=".csv" class="hidden">
+-                </div>
++            <button id="btn-f-save" class="oa-p-btn-action">?脣??</button>
++            <button id="btn-f-save-as-new" class="oa-p-btn-action hidden"
++                style="background:none; border:1px solid #764ba2; color:#764ba2; margin-top:10px;">?血??箸?</button>
++            <div id="btn-f-cancel"
++                style="text-align:center; margin-top:10px; font-size:12px; color:#999; cursor:pointer;" class="hidden">
++                ??蝺刻摩</div>
++
++            <div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px; display:flex; gap:8px;">
++                <button id="btn-f-export" style="flex:1; font-size:11px; padding:6px; cursor:pointer;">?臬</button>
++                <button id="btn-f-import" style="flex:1; font-size:11px; padding:6px; cursor:pointer;">?臬</button>
++                <input type="file" id="in-f-file" class="hidden" accept=".csv">
+             </div>
+         </div>
+ 
+-        <div class="settings-bar"
+-            style="padding: 10px; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #666;">
+-            <span>憿舐內?豢筑??/span>
+-            <input type="checkbox" id="toggle-float-ball" checked style="width: auto;">
+-        </div>
++        <div style="padding:15px; font-size:10px; color:#ddd; text-align:center; background:#fafafa;">v4.6.2 (Popup
++            Unified)</div>
++    </div> <!-- #oa-side-panel -->
+ 
+-        <footer>
+-            <div id="status">皞?撠梁?</div>
+-            <div style="font-size: 9px; color: #ccc; margin-top: 5px;">v3.9_Final_Stable</div>
+-        </footer>
+-    </div>
+     <script src="popup.js"></script>
+ </body>
+ 
+diff --git a/extension/popup.js b/extension/popup.js
+index 8b6fc06..814ddba 100644
+--- a/extension/popup.js
++++ b/extension/popup.js
+@@ -1,171 +1,321 @@
+ /**
+- * Version: 3.9_Final_Stable
+- * ?詨?閫?捱嚗?蝒仃?阡??????銋??甇乩犖?⊿??憛?+ * Version: 4.6.2 (Popup Unified)
++ * ?瘚桅??100% 蝯曹????popup.js
+  */
+ 
+ document.addEventListener('DOMContentLoaded', async function () {
+-    const statusEl = document.getElementById('status');
+-    const vendorListEl = document.getElementById('vendor-list');
+-    const toggleFloatBtn = document.getElementById('toggle-float-ball');
+-
+-    // Tabs & Views
+-    const tabFill = document.getElementById('tab-fill'), tabManage = document.getElementById('tab-manage');
+-    const viewFill = document.getElementById('view-fill'), viewManage = document.getElementById('view-manage');
+-
+-    // 16 甈?摰儔
+-    const fields = ['label', 'propertyName', 'reportNo', 'manager', 'projectContent', 'budget', 'total', 'quoteType', 'buyType', 'currency', 'vendorName', 'content', 'amount', 'inviteCount', 'replyCount', 'reason'];
++    let projects = [];
++    const fields = ['label', 'propertyName', 'reportNo', 'manager', 'projectContent', 'budget', 'total', 'quoteType', 'buyType', 'currency', 'inviteCount', 'replyCount', 'reason', 'winnerName', 'contractCurrency', 'contractAmount'];
+     const inputs = {};
+-    fields.forEach(f => inputs[f] = document.getElementById('input-' + f));
+-
+-    const editIdInput = document.getElementById('edit-id'), formTitle = document.getElementById('form-title');
+-    const btnSave = document.getElementById('btn-save'), btnCancel = document.getElementById('btn-cancel');
+-    const btnManagerPick = document.getElementById('btn-oa-manager-pick');
+-    const inputManagerId = document.getElementById('input-manager-id');
+-    const btnExport = document.getElementById('btn-export'), btnImport = document.getElementById('btn-import-trigger');
+-    const inputImport = document.getElementById('input-import');
+-
+     let lastBackup = null;
+ 
+-    // --- 1. ?阮??????---
+-    async function saveDraft() {
+-        const draft = { id: editIdInput.value, managerId: inputManagerId.value };
+-        fields.forEach(f => draft[f] = inputs[f] ? inputs[f].value : "");
+-        chrome.storage.local.set({ 'oa_form_draft': draft });
+-    }
++    const tabFill = document.getElementById('tab-v-fill'), tabManage = document.getElementById('tab-v-manage');
++    const viewFill = document.getElementById('view-v-fill'), viewManage = document.getElementById('view-v-manage');
+ 
+-    async function loadDraft() {
+-        const res = await chrome.storage.local.get(['oa_form_draft', 'oa_picker_result']);
++    function init() {
++        fields.forEach(f => {
++            const el = document.getElementById('in-f-' + f);
++            if (el) {
++                inputs[f] = el;
++                if (['budget', 'total', 'contractAmount'].includes(f)) {
++                    el.addEventListener('blur', function () {
++                        if (this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2);
++                    });
++                }
++            }
++        });
++        bindEvents();
++        initSearch();
++        syncData();
++    }
+ 
+-        // ?芸?憛怠?阮
+-        if (res.oa_form_draft) {
+-            const d = res.oa_form_draft;
+-            editIdInput.value = d.id || "";
+-            inputManagerId.value = d.managerId || "";
+-            fields.forEach(f => { if (inputs[f]) inputs[f].value = d[f] || ""; });
+-            if (editIdInput.value) { formTitle.textContent = "蝺刻摩?"; btnCancel.classList.remove('hidden'); btnSave.textContent = "?湔?"; }
++    function initSearch() {
++        const input = document.getElementById('oa-search-input');
++        if (input) {
++            input.oninput = () => renderList(input.value.trim());
+         }
++    }
+ 
+-        // 瑼Ｘ銝血?憛思犖?⊿????(靘 content.js ???)
+-        if (res.oa_picker_result) {
+-            inputs['manager'].value = res.oa_picker_result.name;
+-            inputManagerId.value = res.oa_picker_result.id;
+-            chrome.storage.local.remove('oa_picker_result');
+-            saveDraft(); // 蝡?郊?啗?蝔?-            updateStatus("??撌脣??仿?犖?? " + res.oa_picker_result.name, "#2ecc71");
+-        }
++    function addDetailRow(data = {}) {
++        const container = document.getElementById('oa-detail-list');
++        if (!container) return;
++        const div = document.createElement('div');
++        div.className = 'oa-detail-row';
++        div.style = "background:#f9f9f9; padding:8px; border-radius:10px; margin-bottom:10px; position:relative; border:1px solid #eee;";
++        div.innerHTML = `
++            <div style="position:absolute; right:5px; top:5px; cursor:pointer; color:#ccc;" onclick="this.parentElement.remove()">??/div>
++            <div class="oa-p-group"><label>?踹??/label><input type="text" class="dt-vendor" value="${data.vendorName || ''}"></div>
++            <div class="oa-p-group"><label>?勗?批捆</label><input type="text" class="dt-content" value="${data.content || ''}"></div>
++            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
++                <div class="oa-p-group">
++                    <label>撟?車</label>
++                    <select class="dt-currency">
++                        <option value="0" ${data.detailCurrency === '0' ? 'selected' : ''}>HKD</option>
++                        <option value="1" ${data.detailCurrency === '1' ? 'selected' : ''}>RMB</option>
++                        <option value="2" ${data.detailCurrency === '2' ? 'selected' : ''}>USD</option>
++                        <option value="3" ${data.detailCurrency === '3' ? 'selected' : ''}>MOP</option>
++                    </select>
++                </div>
++                <div class="oa-p-group"><label>??</label><input type="text" class="dt-amount" value="${data.amount || ''}"></div>
++            </div>
++        `;
++        container.appendChild(div);
++        div.querySelector('.dt-amount').addEventListener('blur', function () {
++            if (this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2);
++        });
+     }
+ 
+-    // ?箸??撓?交?蝬??芸??遢
+-    Object.values(inputs).forEach(el => { if (el) el.oninput = saveDraft; });
+-    loadDraft();
++    function bindEvents() {
++        document.getElementById('oa-btn-refresh').onclick = syncData;
+ 
+-    // --- 2. ?豢筑??甈痊?豢? ---
+-    if (toggleFloatBtn) {
+-        chrome.storage.local.get(['oa_show_float_ball'], (res) => { toggleFloatBtn.checked = (res.oa_show_float_ball !== false); });
+-        toggleFloatBtn.onchange = () => { chrome.storage.local.set({ 'oa_show_float_ball': toggleFloatBtn.checked }); updateStatus(toggleFloatBtn.checked ? "???豢筑?歇??" : "?? ?豢筑?歇?梯?", "#2ecc71"); };
+-    }
++        // 敹恍‵?極?瑕?
++        document.getElementById('oa-btn-undo').onclick = () => {
++            if (lastBackup) {
++                const msg = { type: "OA_LINK_FILL", project: { label: "?Ｗ儔?遢", details: [], ...lastBackup } };
++                sendMessageToActiveTab(msg);
++            } else {
++                alert("?? 撠?舀敺拍??遢");
++            }
++        };
++        document.getElementById('oa-btn-clear').onclick = () => {
++            sendMessageToActiveTab({ type: "OA_LINK_CLEAR" });
++        };
++
++        // 敹急撌亙??隞?+        document.getElementById('oa-btn-add').onclick = () => { resetForm(); tabManage.click(); };
++        document.getElementById('oa-btn-save').onclick = () => document.getElementById('btn-f-save').click();
++        document.getElementById('oa-btn-export').onclick = () => document.getElementById('btn-f-export').click();
++        document.getElementById('oa-btn-import').onclick = () => document.getElementById('btn-f-import').click();
++
++        tabFill.onclick = () => { tabFill.classList.add('active'); tabManage.classList.remove('active'); viewFill.classList.remove('hidden'); viewManage.classList.add('hidden'); };
++        tabManage.onclick = () => { tabManage.classList.add('active'); tabFill.classList.remove('active'); viewManage.classList.remove('hidden'); viewFill.classList.add('hidden'); };
++
++        document.getElementById('btn-f-pick').onclick = () => {
++            alert("?? 敶?隞?⊥??湔霈???Ｖ葉?犖?⊿?嚗??函雯????OA ?豢筑?Ｘ雿輻甇文??踝????撓?亦???蝔晞?);
++        };
++
++        document.getElementById('btn-add-detail').onclick = () => addDetailRow();
++
++        function exportToCSV() {
++            const h = ["?璅?", "?拇平?迂", "?勗蝺刻?", "?蝬?", "??批捆", "蝡???", "??蝮賢", "?勗敶Ｗ?", "?∟頃憿", "撟?車", "?踹??, "?勗?批捆", "?敦撟?車", "??", "?隢??, "???勗", "?刻??", "銝剜??砍", "??撟?車", "????"];
++            const rows = [];
++            projects.forEach(p => {
++                (p.details || [{}]).forEach(dt => {
++                    const row = [p.label, p.propertyName, p.reportNo, p.manager, p.projectContent, p.budget, p.total, p.quoteType, p.buyType, p.currency, dt.vendorName, dt.content, dt.detailCurrency, dt.amount, p.inviteCount, p.replyCount, p.reason, p.winnerName, p.contractCurrency, p.contractAmount];
++                    rows.push(row.map(v => `"${(String(v || '')).replace(/"/g, '""')}"`).join(","));
++                });
++            });
++            const b = new Blob(["\uFEFF" + h.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8' });
++            const url = URL.createObjectURL(b);
+ 
+-    const DB = {
+-        primaryKey: 'oa_projects_v13',
+-        async get() {
+-            const res = await new Promise(r => chrome.storage.local.get(this.primaryKey, r));
+-            return Array.isArray(res[this.primaryKey]) ? res[this.primaryKey] : [];
+-        },
+-        async save(data) {
+-            const o = {}; o[this.primaryKey] = data;
+-            await chrome.storage.local.set(o);
+-            chrome.storage.local.remove('oa_form_draft'); // ?脣?摰皜?阮
+-            return true;
++            // 雿輻 chrome.downloads API ?蹂誨?湔 click() ??popup 銝剜蝛拙
++            chrome.downloads.download({
++                url: url,
++                filename: `OA_Projects_${Date.now()}.csv`,
++                saveAs: true
++            });
+         }
+-    };
+-
+-    let projects = await DB.get();
+-    renderList();
+-
+-    // --- 3. UI 鈭支? ---
+-    tabFill.onclick = () => { viewFill.classList.remove('hidden'); viewManage.classList.add('hidden'); tabFill.classList.add('active'); tabManage.classList.remove('active'); resetForm(); chrome.storage.local.remove('oa_form_draft'); };
+-    tabManage.onclick = () => { viewManage.classList.remove('hidden'); viewFill.classList.add('hidden'); tabManage.classList.add('active'); tabFill.classList.remove('active'); };
+-
+-    if (btnManagerPick) {
+-        btnManagerPick.onclick = () => {
+-            saveDraft(); // ???阮
+-            chrome.storage.local.set({ 'oa_picker_active': true });
+-            runInTab(() => { const b = document.getElementById('field1366309_browserbtn'); if (b) b.click(); });
+-            updateStatus("?? ?訾犖敺??唳??迨閬??喳...", "#3498db");
+-            // 甇斗?敶???????鈭斤策 content.js
++
++        document.getElementById('btn-f-save').onclick = async () => {
++            const id = document.getElementById('in-f-id').value || "p_" + Date.now();
++            const p = { id: id, managerId: document.getElementById('in-f-managerId').value, details: [] };
++            fields.forEach(f => { if (inputs[f]) p[f] = inputs[f].value.trim(); });
++            document.querySelectorAll('.oa-detail-row').forEach(row => {
++                p.details.push({
++                    vendorName: row.querySelector('.dt-vendor').value.trim(),
++                    content: row.querySelector('.dt-content').value.trim(),
++                    detailCurrency: row.querySelector('.dt-currency').value,
++                    amount: row.querySelector('.dt-amount').value.trim()
++                });
++            });
++            if (!p.label || p.details.length === 0) return alert("敹‵?撩憭梧?");
++            const idx = projects.findIndex(x => x && x.id === id);
++            if (idx > -1) projects[idx] = p; else projects.push(p);
++            await chrome.storage.local.set({ 'oa_projects_v13': projects });
++            alert("??靽???"); syncData(); tabFill.click(); resetForm();
+         };
++
++        document.getElementById('btn-f-save-as-new').onclick = async () => {
++            const p = { id: "p_" + Date.now(), managerId: document.getElementById('in-f-managerId').value, details: [] };
++            fields.forEach(f => { if (inputs[f]) p[f] = inputs[f].value.trim(); });
++            document.querySelectorAll('.oa-detail-row').forEach(row => {
++                p.details.push({
++                    vendorName: row.querySelector('.dt-vendor').value.trim(),
++                    content: row.querySelector('.dt-content').value.trim(),
++                    detailCurrency: row.querySelector('.dt-currency').value,
++                    amount: row.querySelector('.dt-amount').value.trim()
++                });
++            });
++            if (!p.label || p.details.length === 0) return alert("敹‵?撩憭梧?");
++            projects.push(p);
++            await chrome.storage.local.set({ 'oa_projects_v13': projects });
++            alert("??撌脣摮?圈???); syncData(); tabFill.click(); resetForm();
++        };
++
++        document.getElementById('btn-f-cancel').onclick = () => { resetForm(); tabFill.click(); };
++        document.getElementById('btn-f-export').onclick = () => exportToCSV();
++
++        const fileIn = document.getElementById('in-f-file');
++        document.getElementById('btn-f-import').onclick = () => fileIn.click();
++        fileIn.onchange = (e) => {
++            if (!e.target.files.length) return;
++            const reader = new FileReader();
++            reader.onload = async (ev) => {
++                const content = ev.target.result;
++                const lines = content.split(/\r?\n/).filter(l => l.trim());
++                if (lines.length < 2) return;
++
++                const grouped = {};
++                lines.slice(1).forEach(l => {
++                    const cols = [];
++                    let c = "", q = false;
++                    for (let i = 0; i < l.length; i++) {
++                        if (l[i] === '"') q = !q;
++                        else if (l[i] === ',' && !q) { cols.push(c); c = ""; }
++                        else c += l[i];
++                    }
++                    cols.push(c);
++
++                    // 雿輻 ?璅? + ?勗蝺刻? 雿 Key ?脰???
++                    const label = (cols[0] || "").trim();
++                    const reportNo = (cols[2] || "").trim();
++                    if (!label && !reportNo) return;
++
++                    const k = label + "_" + reportNo;
++                    if (!grouped[k]) {
++                        grouped[k] = {
++                            id: "p_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
++                            label: label,
++                            propertyName: (cols[1] || "").trim(),
++                            reportNo: reportNo,
++                            manager: (cols[3] || "").trim(),
++                            projectContent: (cols[4] || "").trim(),
++                            budget: (cols[5] || "").trim(),
++                            total: (cols[6] || "").trim(),
++                            quoteType: (cols[7] || "").trim(),
++                            buyType: (cols[8] || "").trim(),
++                            currency: (cols[9] || "0").trim(),
++                            details: [],
++                            inviteCount: (cols[14] || "").trim(),
++                            replyCount: (cols[15] || "").trim(),
++                            reason: (cols[16] || "").trim(),
++                            winnerName: (cols[17] || "").trim(),
++                            contractCurrency: (cols[18] || "0").trim(),
++                            contractAmount: (cols[19] || "").trim()
++                        };
++                    }
++
++                    // 瘛餃??敦嚗?文??摰嫘馳蝔柴?憿?
++                    if (cols[10] || cols[11] || cols[13]) {
++                        grouped[k].details.push({
++                            vendorName: (cols[10] || "").trim(),
++                            content: (cols[11] || "").trim(),
++                            detailCurrency: (cols[12] || "0").trim(),
++                            amount: (cols[13] || "").trim()
++                        });
++                    }
++                });
++
++                const imported = Object.values(grouped);
++                if (imported.length > 0) {
++                    projects = imported;
++                    await chrome.storage.local.set({ 'oa_projects_v13': projects });
++                    alert(`?????臬 ${imported.length} ???害);
++                    syncData();
++                } else {
++                    alert("?? ?芰?暹????);
++                }
++            };
++            reader.readAsText(e.target.files[0]);
++            fileIn.value = ""; // ?蔭 input 隞乩噶銝活?豢?????隞?+        };
++    }
++
++    async function syncData() {
++        const res = await chrome.storage.local.get(['oa_projects_v13']);
++        projects = res.oa_projects_v13 || [];
++        const searchInput = document.getElementById('oa-search-input');
++        renderList(searchInput ? searchInput.value.trim() : "");
+     }
+ 
+-    if (btnSave) btnSave.onclick = async () => {
+-        const p = { id: editIdInput.value || "p_" + Date.now(), managerId: inputManagerId.value };
+-        fields.forEach(f => p[f] = inputs[f] ? inputs[f].value.trim() : "");
+-        if (!p.label || !p.vendorName) return updateStatus("?? 璅???詨?敹‵", "#e74c3c");
+-        const idx = projects.findIndex(x => x && x.id === p.id);
+-        if (idx > -1) projects[idx] = p; else projects.push(p);
+-        await DB.save(projects);
+-        renderList(); resetForm(); updateStatus("??撌脣摮???, "#2ecc71");
+-    };
++    function renderList(query = "") {
++        const list = document.getElementById('oa-disp-list'); if (!list) return;
+ 
+-    if (btnCancel) btnCancel.onclick = () => { resetForm(); chrome.storage.local.remove('oa_form_draft'); };
++        let filtered = projects;
++        if (query) {
++            const q = query.toLowerCase();
++            filtered = projects.filter(p =>
++                (p.label && p.label.toLowerCase().includes(q)) ||
++                (p.manager && p.manager.toLowerCase().includes(q)) ||
++                (p.details && p.details.some(dt => dt.vendorName && dt.vendorName.toLowerCase().includes(q)))
++            );
++        }
+ 
+-    // --- 4. 憛怠?? ---
+-    function runFill(p) {
+-        updateStatus("?? 甇?憛怠?...", "#3498db");
+-        runInTab((ids) => {
+-            const bak = {};
+-            ids.forEach(id => { const e = document.getElementById(id) || document.querySelector(`[name="${id}"]`); bak[id] = e ? e.value : ""; });
+-            return bak;
+-        }, [['field1366311', 'field1366312', 'field1366309', 'field1366275', 'field1366310', 'field1366280', 'field1366276', 'field1366278', 'field1366286_0', 'field1366287_0', 'field1366289_0', 'field1366290', 'field1366291', 'field1366292', 'field1366313', 'field1366294']], (res) => {
+-            if (res?.[0]?.result) lastBackup = res[0].result;
+-            const msg = { type: "OA_LINK_FILL", project: JSON.parse(JSON.stringify(p)) };
+-            runInTab((m) => {
+-                window.postMessage(m, "*");
+-                function b(w) { for (let i = 0; i < w.frames.length; i++) { try { w.frames[i].postMessage(m, "*"); b(w.frames[i]); } catch (e) { } } }
+-                b(window);
+-            }, [msg], () => updateStatus("??撌脣??‵??, "#2ecc71"));
++        list.innerHTML = filtered.length === 0 ? `<p style="padding:40px; color:#999; text-align:center;">${query ? '?曆??啣???? : '撠閮?'}</p>` : '';
++        filtered.forEach(p => {
++            const div = document.createElement('div'); div.className = 'oa-p-item';
++            div.innerHTML = `
++                <div style="display:flex; justify-content:space-between; align-items:center;">
++                    <div style="flex:1;"><strong>${p.label}</strong></div>
++                    <div style="display:flex; gap:8px;">
++                        <div class="edit-btn" style="cursor:pointer; padding:2px 5px;">??/div>
++                        <div class="del-btn" style="cursor:pointer; padding:2px 5px;">??儭?/div>
++                    </div>
++                </div>`;
++            div.querySelector('div[style*="flex:1"]').onclick = () => { console.log("Filling Project:", p); runFill(p); };
++            div.querySelector('.edit-btn').onclick = (e) => {
++                e.stopPropagation(); document.getElementById('in-f-id').value = p.id; document.getElementById('in-f-managerId').value = p.managerId || "";
++                fields.forEach(f => { if (inputs[f]) inputs[f].value = p[f] || ""; });
++                const dList = document.getElementById('oa-detail-list'); dList.innerHTML = "";
++                if (p.details) p.details.forEach(dt => addDetailRow(dt));
++                document.getElementById('tab-v-manage').click(); document.getElementById('btn-f-save').textContent = "?湔?";
++                document.getElementById('btn-f-cancel').classList.remove('hidden');
++                document.getElementById('btn-f-save-as-new').classList.remove('hidden');
++            };
++            div.querySelector('.del-btn').onclick = async (e) => {
++                e.stopPropagation();
++                if (confirm(`??儭?蝣箏??芷??{p.label}??嚗)) {
++                    projects = projects.filter(x => x && x.id !== p.id);
++                    await chrome.storage.local.set({ 'oa_projects_v13': projects });
++                    syncData();
++                }
++            };
++            list.appendChild(div);
+         });
+     }
+ 
+-    // --- 5. ?臬?臬 ---
+-    if (btnExport) btnExport.onclick = () => {
+-        const h = ["?璅?", "?拇平?迂", "?勗蝺刻?", "?蝬?", "??批捆", "蝡???", "??蝮賢", "?勗敶Ｗ?", "?∟頃憿", "撟?車", "?踹??, "?勗?批捆", "??", "?隢??, "???勗", "?刻??"];
+-        const r = projects.map(x => fields.map(f => `"${(x[f] || '').replace(/"/g, '""')}"`).join(","));
+-        const b = new Blob(["\uFEFF" + h.join(",") + "\n" + r.join("\n")], { type: 'text/csv;charset=utf-8' });
+-        const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `Projects_${Date.now()}.csv`; a.click();
+-    };
+-
+-    if (btnImport) btnImport.onclick = () => inputImport.click();
+-    if (inputImport) inputImport.onchange = (e) => {
+-        const reader = new FileReader();
+-        reader.onload = async (ev) => {
+-            const lines = ev.target.result.split(/\r?\n/).filter(l => l.trim().length > 0);
+-            const imp = lines.slice(1).map((l, idx) => {
+-                const cols = []; let cur = "", inQ = false;
+-                for (let i = 0; i < l.length; i++) { if (l[i] === '"') { if (inQ && l[i + 1] === '"') { cur += '"'; i++; } else { inQ = !inQ; } } else if (l[i] === ',' && !inQ) { cols.push(cur); cur = ""; } else { cur += l[i]; } }
+-                cols.push(cur);
+-                if (cols.length < 3) return null;
+-                const p = { id: "p_" + Date.now() + "_" + idx }; fields.forEach((f, i) => p[f] = (cols[i] || "").trim()); return p;
+-            }).filter(x => x);
+-            if (imp.length > 0) { projects = (confirm(`?臬 ${imp.length} 蝑?`)) ? imp : [...projects, ...imp]; await DB.save(projects); renderList(); updateStatus("???臬摰", "#2ecc71"); }
+-            inputImport.value = "";
+-        };
+-        reader.readAsText(e.target.files[0]);
+-    };
+-
+-    function renderList() {
+-        vendorListEl.innerHTML = projects.length === 0 ? '<p class="hint">撠? (隢????CSV)</p>' : '';
+-        projects.forEach(p => {
+-            const div = document.createElement('div'); div.className = 'vendor-item';
+-            div.innerHTML = `<div class="vendor-info"><span class="btn-title">${esc(p.label)}</span><span class="btn-subtitle">${esc(p.vendorName)}</span></div><div class="actions"><button class="icon-btn ed-btn">??</button><button class="icon-btn del-btn">??儭?/button></div>`;
+-            div.querySelector('.vendor-info').onclick = () => runFill(p);
+-            div.querySelector('.ed-btn').onclick = (e) => { e.stopPropagation(); tabManage.click(); formTitle.textContent = "蝺刻摩?"; editIdInput.value = p.id; fields.forEach(f => { if (inputs[f]) inputs[f].value = p[f] || ""; }); inputManagerId.value = p.managerId || ""; btnCancel.classList.remove('hidden'); btnSave.textContent = "?湔?"; saveDraft(); };
+-            div.querySelector('.del-btn').onclick = async (e) => { e.stopPropagation(); if (confirm(`?芷??{p.label}??`)) { projects = projects.filter(x => x && x.id !== p.id); await DB.save(projects); renderList(); } };
+-            vendorListEl.appendChild(div);
++    // ?潮策 content.js ?脰?撖阡?憛怠?
++    function sendMessageToActiveTab(msg) {
++        chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
++            if (tabs && tabs[0]) {
++                chrome.tabs.sendMessage(tabs[0].id, msg, function (response) {
++                    if (chrome.runtime.lastError) {
++                        console.error('Popup message failed. Are you on a valid page?', chrome.runtime.lastError.message);
++                        alert("?? 憛怠?憭望??迨??航銝??‵??隢Ⅱ靽甇?Ⅱ??OA ?惜銝准?);
++                    }
++                });
++            }
+         });
+     }
+ 
+-    function resetForm() { formTitle.textContent = "?啣??"; editIdInput.value = ""; inputManagerId.value = ""; fields.forEach(f => { if (inputs[f]) inputs[f].value = (f === 'currency' ? 'HKD' : ""); }); btnCancel.classList.add('hidden'); btnSave.textContent = "?脣?"; }
+-    function updateStatus(m, c) { statusEl.textContent = m; statusEl.style.color = c; setTimeout(() => { statusEl.textContent = "皞?撠梁?"; statusEl.style.color = "#95a5a6"; }, 3000); }
+-    function esc(s) { const d = document.createElement('div'); d.textContent = s || ""; return d.innerHTML; }
+-    function runInTab(f, a, c) { chrome.tabs.query({ active: true, currentWindow: true }, (t) => { if (t[0]) chrome.scripting.executeScript({ target: { tabId: t[0].id, allFrames: true }, func: f, args: a || [] }, c); }); }
++    function runFill(p) {
++        // ?遣蝡?隞賭誑?拇靘???閬 popup_backup ?Ｗ儔 (?望 popup ?啣??嚗?瘜?亥???DOM)
++        // ?甇斤陛??隞賜?湔?蔭
++        lastBackup = null;
++
++        const msg = { type: "OA_LINK_FILL", project: JSON.parse(JSON.stringify(p)) };
++        sendMessageToActiveTab(msg);
++    }
++
++    function resetForm() {
++        document.getElementById('in-f-id').value = ""; document.getElementById('in-f-managerId').value = "";
++        fields.forEach(f => { if (inputs[f]) inputs[f].value = (f === 'currency' || f === 'contractCurrency') ? '0' : ''; });
++        document.getElementById('oa-detail-list').innerHTML = ""; addDetailRow();
++        document.getElementById('btn-f-save').textContent = "?脣??";
++        document.getElementById('btn-f-cancel').classList.add('hidden');
++        document.getElementById('btn-f-save-as-new').classList.add('hidden');
++        document.getElementById('in-f-manager').style.backgroundColor = "";
++    }
++
++    init();
+ });
+diff --git a/extension/styles.css b/extension/styles.css
+index 4ecbd70..4ef02e4 100644
+--- a/extension/styles.css
++++ b/extension/styles.css
+@@ -143,9 +143,17 @@ header h1 {
+ .form-container {
+     display: flex;
+     flex-direction: column;
+-    gap: 12px;
++    gap: 8px;
+ }
+ 
++.form-actions {
++    display: flex;
++    flex-direction: column;
++    gap: 8px;
++    margin-top: 8px;
++}
++
++
+ .form-container h3 {
+     margin: 0 0 4px 0;
+     font-size: 16px;
+diff --git a/package.json b/package.json
+index 98acf64..dd1b42e 100644
+--- a/package.json
++++ b/package.json
+@@ -1,5 +1,6 @@
+ {
+   "dependencies": {
+     "@larksuiteoapi/node-sdk": "^1.56.1"
+-  }
+-}
++  },
++  "version": "4.7.1"
++}
+\ No newline at end of file

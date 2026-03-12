@@ -29,7 +29,6 @@
             transition: none !important;
             margin: 0;
             display: flex;
-            flex-direction: column; /* 改為垂直堆疊，使 Toolbar 在頂部 */
             /* Ensure it is displayed, ignoring content.js hide logic */
             visibility: visible;
         }
@@ -61,44 +60,40 @@
 
     <!-- 完全複製自 content.js 的 panel 結構 -->
     <div id="oa-side-panel" class="open"> <!-- 預設為 open -->
-        <div id="oa-panel-header" style="flex-direction: column; align-items: stretch; height: auto; padding: 10px 15px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                <div class="oa-header-left">
-                    <div class="oa-logo">un</div>
-                    <div class="oa-title-group">
-                        <span style="font-size:16px;">💾</span>
-                        <span>採購一鍵通</span>
-                        <span style="font-size:10px; opacity:0.5;">▼</span>
-                    </div>
+        <div id="oa-panel-header">
+            <div class="oa-header-left">
+                <div class="oa-logo">un</div>
+                <div class="oa-title-group">
+                    <span style="font-size:16px;">💾</span>
+                    <span>採購一鍵通</span>
+                    <span style="font-size:10px; opacity:0.5;">▼</span>
                 </div>
-                <div class="oa-header-right">
-                    <span class="oa-header-icon" title="更多設置">···</span>
-                    <span class="oa-header-icon" id="oa-btn-refresh" title="同步數據">↻</span>
-                    <span class="oa-header-icon close" id="oa-panel-close" title="隱藏視窗">✕</span>
-                </div>
+            </div>
+            <div class="oa-header-right">
+                <span class="oa-header-icon" title="更多設置">···</span>
+                <span class="oa-header-icon" id="oa-btn-refresh" title="同步數據">↻</span>
+                <span class="oa-header-icon close" id="oa-panel-close" title="隱藏視窗">✕</span>
             </div>
         </div>
 
         <div class="oa-action-toolbar"
-            style="padding:10px 15px; display:flex; flex-direction: row; gap:6px; background:#fff; border-bottom:1px solid #eee;">
+            style="padding:10px 15px; display:flex; gap:6px; background:#fff; border-bottom:1px solid #eee;">
             <button class="oa-tool-btn" id="oa-btn-add" title="新增項目"
-                style="flex:1; padding:8px 0; border:1px solid #764ba2; color:#764ba2; background:#fff; border-radius:6px; cursor:pointer; font-size:12px; font-weight: 500;">新增</button>
+                style="flex:1; padding:6px 0; border:1px solid #764ba2; color:#764ba2; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">新增</button>
             <button class="oa-tool-btn" id="oa-btn-import" title="匯入 CSV"
-                style="flex:1; padding:8px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:12px;">匯入</button>
+                style="flex:1; padding:6px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">匯入</button>
             <button class="oa-tool-btn" id="oa-btn-export" title="匯出 CSV"
-                style="flex:1; padding:8px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:12px;">匯出</button>
+                style="flex:1; padding:6px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:11px;">匯出</button>
             <button class="oa-tool-btn" id="oa-btn-save" title="保存當前"
-                style="flex:1.2; padding:8px 0; border:none; color:#fff; background:linear-gradient(135deg, #764ba2 0%, #667eea 100%); border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold;">保存</button>
+                style="flex:1.2; padding:6px 0; border:none; color:#fff; background:linear-gradient(135deg, #764ba2 0%, #667eea 100%); border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">保存</button>
         </div>
 
         <div class="oa-p-tabs">
             <div class="oa-p-tab active" id="tab-v-fill">快速填充</div>
             <div class="oa-p-tab" id="tab-v-manage">項目管理</div>
-            <div class="oa-p-tab" id="tab-v-settings">更多設置</div>
         </div>
 
         <div id="view-v-fill" class="oa-panel-body">
-            <!-- ... existing content ... -->
             <div class="oa-section-header" style="display:flex; justify-content:space-between; align-items:center;">
                 <div class="oa-section-title">📖 填充列表</div>
                 <div class="oa-search-box" style="margin-left:auto;">
@@ -106,6 +101,7 @@
                         style="width:120px; padding:4px 8px; border-radius:12px; border:1px solid #ddd; font-size:12px; outline:none;">
                 </div>
             </div>
+            <!-- 新增：快速填充視圖按鈕工具欄 -->
             <div class="oa-fill-toolbar" style="padding:0 10px 10px 10px; display:flex; gap:8px;">
                 <button id="oa-btn-undo" class="oa-tool-btn"
                     style="flex:1; padding:5px; border-radius:6px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:11px;">↩️
@@ -115,17 +111,6 @@
                     清空</button>
             </div>
             <div id="oa-disp-list"></div>
-        </div>
-
-        <div id="view-v-settings" class="oa-panel-body hidden">
-            <div class="oa-section-title">⚙️ 功能設置</div>
-            <div class="oa-p-group" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #eee;">
-                <label style="margin:0;">顯示懸浮輔助球</label>
-                <input type="checkbox" id="oa-check-ball" style="width:20px; height:20px; cursor:pointer;">
-            </div>
-            <div style="font-size:11px; color:#999; margin-top:10px;">
-                開啟後，頁面右下側將出現圓形工具球，方便您快速執行新增、匯入等操作。
-            </div>
         </div>
 
         <div id="view-v-manage" class="oa-panel-body hidden">

@@ -1,139 +1,248 @@
 /**
  * Weaver OA Main Bridge
- * Version: 4.6.2
- * 核心功能：全自動增減行 + 深度修復人員選取器 (e8_browser) 填充
+ * Version: 4.9.3 - Multi-Frame Broadcast Fix
+ * 核心功能：全自動增減行 + 強化版人員選取器 + 跨 Iframe 廣播轉發
  */
 
 (function () {
-    console.log("%cOA Bridge v4.6.2: Active.", "color:white; background:#00BCD4; padding:2px 5px; border-radius:3px;");
+    const isTop = (window.self === window.top);
+    console.log(`%cOA Bridge v4.9.3: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
 
+    // 全球暫存，供人員選擇器自動匹配
+    window.__OA_LAST_PROJECT = window.__OA_LAST_PROJECT || null;
+
+    // 監聽來自內容腳本或其他窗口的 postMessage
     window.addEventListener("message", function (event) {
-        if (!event.data || event.data.type !== "OA_LINK_FILL") return;
+        // 安全校驗：非本頁發出且非廣播訊息則跳過
+        if (!event.data || (event.data.type !== "OA_LINK_FILL" && event.data.type !== "OA_LINK_CLEAR" && event.data.type !== "OA_BRIDGE_BROADCAST")) return;
 
-        const data = event.data.project;
-        if (!data) return;
+        // 如果收到的是廣播包裹，解包
+        const payload = event.data.type === "OA_BRIDGE_BROADCAST" ? event.data.payload : event.data;
+        
+        if (isTop && event.data.type !== "OA_BRIDGE_BROADCAST") {
+            // 🌟 頂層視窗核心邏輯：向所有子 iframe 進行廣播
+            console.log("%cOA Bridge: Top-Level Signal Captured. Broadcasting to frames...", "color:blue; font-weight:bold;");
+            broadcastToFrames(window, { type: "OA_BRIDGE_BROADCAST", payload: payload });
+        }
 
+        // 執行填充檢測
+        processSignal(payload);
+    });
+
+    /**
+     * 遞迴向所有子 iframe 發送訊息
+     */
+    function broadcastToFrames(win, msg) {
+        for (let i = 0; i < win.frames.length; i++) {
+            try {
+                const subWin = win.frames[i];
+                subWin.postMessage(msg, "*");
+                broadcastToFrames(subWin, msg);
+            } catch (e) {
+                // 忽略跨域 iframe 導致的權限錯誤
+            }
+        }
+    }
+
+    /**
+     * 處理填充或清理邏輯
+     */
+    function processSignal(data) {
+        if (data.type === "OA_LINK_CLEAR") {
+            console.log("OA Bridge: Clearing fields locally...");
+            clearAllFields();
+            return;
+        }
+
+        const project = data.project;
+        if (!project) return;
+
+        window.__OA_LAST_PROJECT = project;
+
+        // 核心檢查：當前窗口是否有目標欄位
         const hasTargets = ['field1366311', 'field1366275', 'field1366310'].some(id => !!(document.getElementById(id) || document.querySelector('[name="' + id + '"]')));
-        if (!hasTargets) return;
+        
+        if (!hasTargets) {
+            // 僅在存在 project 數據時輸出弱提示，減少控制台噪音
+            if (isTop) console.log("OA Bridge: (Top) No fields here, waiting for iframe processing.");
+            return; 
+        }
 
-        console.log("OA Bridge: Filling Data for " + data.label, data);
+        console.log("%cOA Bridge: TARGET FOUND! Filling -> " + project.label, "color:green; font-weight:bold; padding:4px; border:2px solid green;");
 
-        // 1. 填充主表 (包含增強的人員 ID 處理)
+        // 1. 填充主表
         const staticMap = {
-            'field1366311': data.propertyName, 'field1366312': data.reportNo, 'field1366309': data.manager,
-            'field1366275': data.projectContent, 'field1366310': data.total, 'field1366280': data.budget,
-            'field1366276': data.quoteType, 'field1366278': data.buyType, 'field1366279': data.currency,
-            'field1366290': data.inviteCount, 'field1366291': data.replyCount, 'field1366292': data.reason,
-            'field1366313': data.winnerName, 'field1366294': data.contractAmount, 'field1366295': data.contractCurrency
+            'field1366311': project.propertyName, 'field1366312': project.reportNo, 'field1366309': project.manager,
+            'field1366275': project.projectContent, 'field1366310': project.total, 'field1366280': project.budget,
+            'field1366276': project.quoteType, 'field1366278': project.buyType, 'field1366279': project.currency,
+            'field1366290': project.inviteCount, 'field1366291': project.replyCount, 'field1366292': project.reason,
+            'field1366313': project.winnerName, 'field1366294': project.contractAmount, 'field1366295': project.contractCurrency
         };
+        
         for (let id in staticMap) {
-            // 傳遞 managerId 供人員欄位使用
-            const mId = (id === 'field1366309') ? data.managerId : null;
+            const mId = (id === 'field1366309') ? project.managerId : null;
             fillField(id, staticMap[id], mId);
         }
 
-        // 2. 填充明細與同步行數
-        if (data.details && data.details.length > 0) {
-            (async function () {
-                const requiredCount = data.details.length;
-                for (let i = 0; i < requiredCount; i++) {
-                    const rowId = `field1366286_${i}`;
-                    let targetEl = document.getElementById(rowId);
-                    if ((!targetEl || targetEl.tagName !== 'INPUT') && i > 0) {
-                        const addBtn = findActionBtnAcrossFrames(window.top, 'add');
-                        if (addBtn) {
-                            addBtn.click();
-                            await new Promise(r => setTimeout(r, i === 1 ? 1200 : 700));
-                            targetEl = document.getElementById(rowId);
-                        }
-                    }
-                    const row = data.details[i];
-                    fillField(`field1366286_${i}`, row.vendorName);
-                    fillField(`field1366287_${i}`, row.content);
-                    fillField(`field1366288_${i}`, row.detailCurrency);
-                    fillField(`field1366289_${i}`, row.amount);
+        // 2. 輔助人員選擇器
+        if (project.label !== "恢復備份") {
+            setTimeout(() => {
+                const mField = document.getElementById('field1366309');
+                if (mField && (!mField.value || mField.value === "")) {
+                    const btn = document.getElementById('field1366309_browserbtn');
+                    if (btn) btn.click();
                 }
-
-                let hasExcess = false;
-                let excessIdx = requiredCount;
-                while (document.getElementById(`field1366286_${excessIdx}`)) {
-                    const chk = findCheckboxForRow(excessIdx);
-                    if (chk) { if (!chk.checked) chk.click(); hasExcess = true; }
-                    excessIdx++;
-                    if (excessIdx > 50) break;
-                }
-                if (hasExcess) {
-                    const delBtn = findActionBtnAcrossFrames(window.top, 'del');
-                    if (delBtn) {
-                        const org = window.confirm; window.confirm = () => true; delBtn.click();
-                        setTimeout(() => { window.confirm = org; }, 1000);
-                    }
-                }
-                console.log("OA Bridge: All tasks finished.");
-            })();
+            }, 1000);
         }
-    });
 
-    function findActionBtnAcrossFrames(win, type) {
-        const id = type === 'add' ? 'addbutton0' : 'delbutton0';
-        const selectors = [`#${id}`, `[name="${id}"]`, `[id^="${id.slice(0, -1)}"]`, type === 'add' ? 'input[onclick*="addRow"]' : 'input[onclick*="deleteRow"]'];
-        try {
-            const doc = win.document;
-            for (let s of selectors) { const b = doc.querySelector(s); if (b) return b; }
-            for (let i = 0; i < win.frames.length; i++) { const found = findActionBtnAcrossFrames(win.frames[i], type); if (found) return found; }
-        } catch (e) { } return null;
+        // 3. 填充明細
+        if (project.details && project.details.length > 0) {
+            handleDetails(project.details);
+        }
     }
 
-    function findCheckboxForRow(idx) {
-        let chk = document.getElementById(`check_node_0_${idx}`) || document.querySelector(`input[name="check_node_0"][value="${idx}"]`);
-        if (chk) return chk;
-        const input = document.getElementById(`field1366286_${idx}`);
-        if (input) { const tr = input.closest('tr'); if (tr) return tr.querySelector('input[type="checkbox"]'); }
-        return null;
+    async function handleDetails(details) {
+        const requiredCount = details.length;
+        for (let i = 0; i < requiredCount; i++) {
+            const rowId = `field1366286_${i}`;
+            let targetEl = document.getElementById(rowId);
+            
+            if ((!targetEl || targetEl.tagName !== 'INPUT') && i > 0) {
+                const addBtn = findActionBtnAcrossFrames(window.top, 'add');
+                if (addBtn) {
+                    addBtn.click();
+                    await new Promise(r => setTimeout(r, i === 1 ? 1200 : 800));
+                    targetEl = document.getElementById(rowId);
+                }
+            }
+            const row = details[i];
+            fillField(`field1366286_${i}`, row.vendorName);
+            fillField(`field1366287_${i}`, row.content);
+            fillField(`field1366288_${i}`, row.detailCurrency);
+            fillField(`field1366289_${i}`, row.amount);
+        }
+        
+        // 刪除多餘行
+        let excessIdx = requiredCount;
+        let hasExcess = false;
+        while (document.getElementById(`field1366286_${excessIdx}`)) {
+            const chk = findCheckboxForRow(excessIdx);
+            if (chk) { if (!chk.checked) chk.click(); hasExcess = true; }
+            excessIdx++;
+            if (excessIdx > 50) break;
+        }
+        if (hasExcess) {
+            const delBtn = findActionBtnAcrossFrames(window.top, 'del');
+            if (delBtn) {
+                const org = window.confirm; window.confirm = () => true; delBtn.click();
+                setTimeout(() => { window.confirm = org; }, 1000);
+            }
+        }
     }
 
     function fillField(id, val, mId = null) {
         const el = document.getElementById(id) || document.querySelector('[name="' + id + '"]');
         if (!el) return;
 
-        // 處理下拉選單
+        const isBrowser = (id === 'field1366309') || el.classList.contains('e8_browser') || !!document.getElementById(id + 'span');
+
         if (el.tagName === 'SELECT') {
             let ok = "";
-            for (let o of el.options) { if (o.text.trim() === val || o.value === val || o.text.includes(val)) { ok = o.value; break; } }
+            for (let o of el.options) {
+                if (o.value === String(val) || o.text.trim() === val || o.text.includes(val)) {
+                    ok = o.value; break;
+                }
+            }
             if (ok !== "") el.value = ok;
         } else {
-            // 處理普通輸入框與人員 ID
-            if (mId && id === 'field1366309') {
-                el.value = mId; // 填入真正的系統 ID
-            } else {
-                el.value = val || "";
-            }
+            const finalVal = (mId && isBrowser) ? mId : (val || "");
+            el.value = finalVal;
+            const elShow = document.getElementById(id + '__');
+            if (elShow) elShow.value = finalVal;
         }
 
-        // 核心：深度修復人员選取器 (Browser 欄位) 的顯示狀態
-        if (id === 'field1366309') {
+        if (isBrowser) {
             const displayVal = val || "";
-            // 1. 更新 Span 顯示內容
-            const spans = [id + 'span', id + '_span', id + 'spanimg'];
+            const spans = [id + 'span', id + '_span'];
             spans.forEach(sid => {
                 const s = document.getElementById(sid);
                 if (s) {
-                    s.innerHTML = '<span class="e8_showNameClass"><a href="javascript:void(0);">' + displayVal + '</a><span class="e8_delClass" onclick="clearFullbrow(' + id.replace('field', '') + ')"> x </span></span>';
-                    s.style.display = (displayVal === "") ? "" : "inline-block";
+                    if (displayVal === "") { s.innerHTML = ""; s.style.display = "none"; }
+                    else {
+                        s.innerHTML = `<span class="e8_showNameClass"><a href="javascript:void(0)" onclick="return false;">${displayVal}</a></span>`;
+                        s.style.display = "inline-block";
+                    }
                 }
             });
-            // 2. 移除 OA 的必填警告驚嘆號
-            const img = document.getElementById(id + 'spanimg');
-            if (img) img.style.display = 'none';
         }
 
-        // 觸發 OA 內部邏輯
-        try {
-            if (window.wfbrowvaluechange) window.wfbrowvaluechange(el, id.replace('field', ''));
-            if (window.checkinput2) window.checkinput2(id, id + 'span', el.getAttribute('viewtype') || '1');
-        } catch (e) { }
-
-        // 觸發標準事件
-        ['change', 'input', 'blur'].forEach(t => el.dispatchEvent(new Event(t, { bubbles: true })));
+        ['change', 'input', 'blur'].forEach(t => {
+            const ev = new Event(t, { bubbles: true });
+            el.dispatchEvent(ev);
+        });
     }
+
+    function clearAllFields() {
+        const ids = ['field1366311', 'field1366312', 'field1366309', 'field1366275', 'field1366310', 'field1366280', 'field1366276', 'field1366278', 'field1366279', 'field1366290', 'field1366291', 'field1366292', 'field1366313', 'field1366294', 'field1366295'];
+        ids.forEach(id => fillField(id, ""));
+    }
+
+    function findActionBtnAcrossFrames(win, type) {
+        const id = type === 'add' ? 'addbutton0' : 'delbutton0';
+        try {
+            const doc = win.document;
+            let b = doc.getElementById(id) || doc.querySelector(`[name="${id}"]`);
+            if (b) return b;
+            for (let i = 0; i < win.frames.length; i++) {
+                const found = findActionBtnAcrossFrames(win.frames[i], type);
+                if (found) return found;
+            }
+        } catch (e) { } return null;
+    }
+
+    function findCheckboxForRow(idx) {
+        const cell = document.getElementById(`field1366286_${idx}`);
+        if (cell) {
+            const tr = cell.closest('tr');
+            if (tr) return tr.querySelector('input[type="checkbox"]');
+        }
+        return null;
+    }
+
+    function autoClickPickerTarget() {
+        setInterval(() => {
+            const data = window.__OA_LAST_PROJECT;
+            if (!data || !data.manager) return;
+            const targetName = data.manager.replace(/\s+/g, '').toLowerCase();
+
+            function searchAndClick(win) {
+                try {
+                    const fDoc = win.document;
+                    if (!fDoc || fDoc.body.getAttribute('oa-processed')) return false;
+                    const elements = Array.from(fDoc.querySelectorAll('td, span, div.e8_browser_item'));
+                    const targetEl = elements.find(el => {
+                        const txt = (el.innerText || "").replace(/\s+/g, '').toLowerCase();
+                        return txt && (txt === targetName || txt.includes(targetName)) && txt.length < 20;
+                    });
+                    if (targetEl) {
+                        fDoc.body.setAttribute('oa-processed', 'true');
+                        const row = targetEl.closest('tr') || targetEl;
+                        row.click();
+                        const dblEvent = new MouseEvent('dblclick', { bubbles: true, view: win });
+                        row.dispatchEvent(dblEvent);
+                        return true;
+                    }
+                    for (let i = 0; i < win.frames.length; i++) {
+                        if (searchAndClick(win.frames[i])) return true;
+                    }
+                } catch (e) { } return false;
+            }
+            const frames = Array.from(document.querySelectorAll('iframe[id*="DialogFrame"]'));
+            frames.forEach(frame => {
+                if (frame.contentWindow) searchAndClick(frame.contentWindow);
+            });
+        }, 1000);
+    }
+
+    autoClickPickerTarget();
 })();

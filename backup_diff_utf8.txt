@@ -1,0 +1,248 @@
+﻿diff --git a/extension/main_bridge.js b/extension/backup_v4.7.1/main_bridge.js
+index 5000d8c..bfc105b 100644
+--- a/extension/main_bridge.js
++++ b/extension/backup_v4.7.1/main_bridge.js
+@@ -1,11 +1,11 @@
+ /**
+  * Weaver OA Main Bridge
+- * Version: 4.6.2
+- * ?詨??嚗?芸?憓?銵?+ 瘛勗漲靽桀儔鈭箏?詨???(e8_browser) 憛怠?
++ * Version: 4.7.1
++ * ?詨??嚗?芸?憓?銵?+ 撘瑕??犖?⊿? (e8_browser) 瘛勗漲?神??蝒???  */
+ 
+ (function () {
+-    console.log("%cOA Bridge v4.6.2: Active.", "color:white; background:#00BCD4; padding:2px 5px; border-radius:3px;");
++    console.log("%cOA Bridge v4.7.1: Power Active.", "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
+ 
+     window.addEventListener("message", function (event) {
+         if (!event.data || event.data.type !== "OA_LINK_FILL") return;
+@@ -13,12 +13,15 @@
+         const data = event.data.project;
+         if (!data) return;
+ 
++        // ?函??怠?嚗?敶?頝臬?餈質馱
++        window.__OA_LAST_PROJECT = data;
++
+         const hasTargets = ['field1366311', 'field1366275', 'field1366310'].some(id => !!(document.getElementById(id) || document.querySelector('[name="' + id + '"]')));
+         if (!hasTargets) return;
+ 
+-        console.log("OA Bridge: Filling Data for " + data.label, data);
++        console.log("OA Bridge: Power Filling for " + data.label, data);
+ 
+-        // 1. 憛怠?銝餉” (?憓撥?犖??ID ??)
++        // 1. 憛怠?銝餉” (?瘛勗漲?神?摩)
+         const staticMap = {
+             'field1366311': data.propertyName, 'field1366312': data.reportNo, 'field1366309': data.manager,
+             'field1366275': data.projectContent, 'field1366310': data.total, 'field1366280': data.budget,
+@@ -27,12 +30,26 @@
+             'field1366313': data.winnerName, 'field1366294': data.contractAmount, 'field1366295': data.contractCurrency
+         };
+         for (let id in staticMap) {
+-            // ?喲? managerId 靘犖?⊥?雿蝙??             const mId = (id === 'field1366309') ? data.managerId : null;
+             fillField(id, staticMap[id], mId);
+         }
+ 
+-        // 2. 憛怠??敦??甇亥???+        // 2. 頛閫貊嚗鈭箏甈?隞征嚗?.5蝘??芸?暺??曉之?∟孛?澆?蝒?撖?(?Ｗ儔?遢?歲??
++        if (data.label !== "?Ｗ儔?遢") {
++            setTimeout(() => {
++                const mField = document.getElementById('field1366309');
++                // ?亙歇蝬?鈭??? managerId嚗停銝?閬????蝒?+                if (mField && (!mField.value || mField.value === "")) {
++                    const btn = document.getElementById('field1366309_browserbtn');
++                    if (btn) {
++                        console.log("OA Bridge: Still empty, launching picker assistant...");
++                        btn.click();
++                    }
++                }
++            }, 1000);
++        }
++
++        // 3. 憛怠??敦??甇亥???         if (data.details && data.details.length > 0) {
+             (async function () {
+                 const requiredCount = data.details.length;
+@@ -74,6 +91,28 @@
+         }
+     });
+ 
++    window.addEventListener("message", function (event) {
++        if (!event.data || event.data.type !== "OA_LINK_CLEAR") return;
++        console.log("OA Bridge: Clearing all fields...");
++        clearAllFields();
++    });
++
++    function clearAllFields() {
++        const ids = ['field1366311', 'field1366312', 'field1366309', 'field1366275', 'field1366310', 'field1366280', 'field1366276', 'field1366278', 'field1366279', 'field1366290', 'field1366291', 'field1366292', 'field1366313', 'field1366294', 'field1366295'];
++        ids.forEach(id => fillField(id, ""));
++
++        // 皜??敦銵?+        let idx = 0;
++        while (document.getElementById(`field1366286_${idx}`)) {
++            fillField(`field1366286_${idx}`, "");
++            fillField(`field1366287_${idx}`, "");
++            fillField(`field1366289_${idx}`, "");
++            const chk = findCheckboxForRow(idx);
++            if (chk && !chk.checked) chk.click();
++            idx++;
++        }
++    }
++
+     function findActionBtnAcrossFrames(win, type) {
+         const id = type === 'add' ? 'addbutton0' : 'delbutton0';
+         const selectors = [`#${id}`, `[name="${id}"]`, `[id^="${id.slice(0, -1)}"]`, type === 'add' ? 'input[onclick*="addRow"]' : 'input[onclick*="deleteRow"]'];
+@@ -96,6 +135,8 @@
+         const el = document.getElementById(id) || document.querySelector('[name="' + id + '"]');
+         if (!el) return;
+ 
++        const isBrowser = (id === 'field1366309') || el.classList.contains('e8_browser') || !!document.getElementById(id + 'span');
++
+         // ??銝??詨
+         if (el.tagName === 'SELECT') {
+             let ok = "";
+@@ -103,37 +144,138 @@
+             if (ok !== "") el.value = ok;
+         } else {
+             // ???桅撓?交??犖??ID
+-            if (mId && id === 'field1366309') {
+-                el.value = mId; // 憛怠?迤?頂蝯?ID
+-            } else {
+-                el.value = val || "";
+-            }
++            const finalVal = (mId && isBrowser) ? mId : (val || "");
++            el.value = finalVal;
++
++            // ?詨?靽格迤嚗???敺?OA ??銝?蝺??雿?(憒?field1366309__)
++            const elShow = document.getElementById(id + '__') || document.querySelector('[name="' + id + '__"]');
++            if (elShow) elShow.value = finalVal;
+         }
+ 
+-        // ?詨?嚗楛摨虫耨敺拐犖?? (Browser 甈?) ?＊蝷箇???-        if (id === 'field1366309') {
++        // 憒??臭犖?⊿?嚗?閰衣憭車?孵??神?豢??＊蝷?+        if (isBrowser) {
+             const displayVal = val || "";
+-            // 1. ?湔 Span 憿舐內?批捆
++            // 1. ?湔憿舐內摰孵 (?詨?嚗eaver OA ?犖?⊿＊蝷?
+             const spans = [id + 'span', id + '_span', id + 'spanimg'];
+             spans.forEach(sid => {
+                 const s = document.getElementById(sid);
+                 if (s) {
+-                    s.innerHTML = '<span class="e8_showNameClass"><a href="javascript:void(0);">' + displayVal + '</a><span class="e8_delClass" onclick="clearFullbrow(' + id.replace('field', '') + ')"> x </span></span>';
+-                    s.style.display = (displayVal === "") ? "" : "inline-block";
++                    if (displayVal === "") { s.innerHTML = ""; s.style.display = "none"; }
++                    else {
++                        // 瑽遣?頂蝯勗????其??渡? HTML 蝯?
++                        s.innerHTML = `<span class="e8_showNameClass"><a href="javascript:void(0)" onclick="return false;">${displayVal}</a><span class="e8_delClass" style="visibility:visible; cursor:pointer;" onclick="if(window.clearFullbrow) window.clearFullbrow('${id.replace('field', '')}', '${id}span', '1');"> x </span></span>`;
++                        s.style.display = "inline-block";
++                    }
+                 }
+             });
+-            // 2. 蝘駁 OA ??憛怨郎????
+-            const img = document.getElementById(id + 'spanimg');
+-            if (img) img.style.display = 'none';
++            if (displayVal !== "") {
++                const img = document.getElementById(id + 'spanimg'); if (img) img.style.display = 'none';
++            }
++
++            // 2. 瘛勗?岫嚗矽??OA ???神?賣 (????????頂蝯?
++            try {
++                const fieldNum = id.replace('field', '');
++                // ?岫撣貊??OA ?豢??‵暺??
++                if (mId && displayVal) {
++                    if (window._writeBackData) window._writeBackData(id, displayVal, mId);
++                    else if (window._writeBackBrowser) window._writeBackBrowser(id, displayVal, mId);
++                }
++            } catch (e) { }
+         }
+ 
+-        // 閫貊 OA ?折?摩
++        // 閫貊 OA ?折?⊿???頛臬?甇?         try {
+-            if (window.wfbrowvaluechange) window.wfbrowvaluechange(el, id.replace('field', ''));
+-            if (window.checkinput2) window.checkinput2(id, id + 'span', el.getAttribute('viewtype') || '1');
+-        } catch (e) { }
++            // ?岫閫貊蝟餌絞????value 霈??矽
++            const fieldNum = id.replace('field', '');
++            if (window.wfbrowvaluechange) window.wfbrowvaluechange(el, fieldNum);
++            if (window.checkinput2) {
++                const viewType = el.getAttribute('viewtype') || '1';
++                window.checkinput2(id, id + 'span', viewType);
++            }
++        } catch (e) { console.warn("OA Bridge: Validation Trigger Error ->", e); }
+ 
+         // 閫貊璅?鈭辣
+-        ['change', 'input', 'blur'].forEach(t => el.dispatchEvent(new Event(t, { bubbles: true })));
++        ['change', 'input', 'blur'].forEach(t => {
++            const ev = new Event(t, { bubbles: true });
++            el.dispatchEvent(ev);
++            const elShow = document.getElementById(id + '__');
++            if (elShow) elShow.dispatchEvent(ev);
++        });
++    }
++
++    /**
++     * ?啣?嚗楛摨衣?批?蝒蒂?芸?暺??格?
++     */
++    function autoClickPickerTarget() {
++        setInterval(() => {
++            const data = window.__OA_LAST_PROJECT;
++            if (!data || !data.manager) return;
++            const targetName = data.manager.replace(/\s+/g, '').toLowerCase();
++
++            function searchAndClick(win) {
++                try {
++                    const fDoc = win.document;
++                    if (!fDoc) return false;
++
++                    // 撌脰?????蝐歹??脫迫???恍??銴?雿?+                    if (fDoc.body && fDoc.body.getAttribute('oa-processed')) return true;
++
++                    // 1. 摰儔?格??交嚗撖祆?撠?隞塚??駁??征?質???嚗?撠神嚗?+                    const elements = Array.from(fDoc.querySelectorAll('td, span, a, div.e8_browser_item'));
++                    const targetEl = elements.find(el => {
++                        if (el.children.length > 2) return false; // ?頞之摰孵
++                        const txt = (el.innerText || "").replace(/\s+/g, '').toLowerCase();
++                        if (!txt) return false;
++                        // ??格???嚗?摮銝?撌桀云憭?(?脣?)
++                        return (txt.includes(targetName) || targetName.includes(txt)) && txt.length <= targetName.length + 10 && txt.length > 1;
++                    });
++
++                    if (targetEl) {
++                        console.log("OA Bridge: Picker Found Power Target ->", targetEl.innerText.trim());
++                        fDoc.body.setAttribute('oa-processed', 'true');
++
++                        const row = targetEl.closest('tr') || targetEl;
++
++                        // 2. 璅⊥暺?嚗???桅嚗eaver 撣賊??? (dbclick) ??暺?敺? OK
++                        row.click();
++                        // 閫貊??嚗?憭?蝒???訾葉銝阡???+                        const dblEvent = new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: win });
++                        row.dispatchEvent(dblEvent);
++
++                        // 3. ??寞?嚗??整Ⅱ摰???+                        setTimeout(() => {
++                            try {
++                                const btns = Array.from(fDoc.querySelectorAll('button, input[type="button"]'));
++                                const okBtn = btns.find(b => b.value?.includes('蝣箏?') || b.innerText?.includes('蝣箏?') || b.id === 'btnok');
++                                if (okBtn) {
++                                    okBtn.click();
++                                    // ?岫隤輻 Weaver OA ?航摮?撅?矽?賣
++                                    if (win.doCallback) win.doCallback();
++                                    else if (win.opener && win.opener.doCallback) win.opener.doCallback();
++                                }
++                            } catch (e) { }
++                        }, 500);
++                        return true;
++                    }
++
++                    // 憒???撅斗銝嚗?餈湔鋆⊿??iframe
++                    for (let i = 0; i < win.frames.length; i++) {
++                        if (searchAndClick(win.frames[i])) return true;
++                    }
++                } catch (e) { }
++                return false;
++            }
++
++            // ???? (??敶撠店獢葉??撅?DialogFrame)
++            const frames = Array.from(document.querySelectorAll('iframe[id*="DialogFrame"]'));
++            frames.forEach(frame => {
++                try {
++                    if (frame.contentWindow) searchAndClick(frame.contentWindow);
++                } catch (e) { }
++            });
++
++        }, 800);
+     }
++
++    autoClickPickerTarget();
+ })();
