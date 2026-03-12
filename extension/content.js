@@ -1,6 +1,6 @@
 /**
  * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.11.1 - Ball Snapping Fix
+ * Version: 4.11.2 - Ghost Drag Fix
  */
 
 (function () {
@@ -224,7 +224,7 @@
                 <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
             </div>
 
-            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.1 (Ball Snapping Fixed)</div>
+            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.2 (Ghost Drag Fixed)</div>
         `;
         document.body.appendChild(panel);
         bindEvents();
@@ -237,69 +237,83 @@
         ball.innerHTML = `<div class="oa-ball-main"><span>un</span></div>`;
         document.body.appendChild(ball);
 
-        let isDragging = false, startX, startY, initialX, initialY;
         const main = ball.querySelector('.oa-ball-main');
+        // 使用模組作用域的拖拽狀態，避免多個事件實例衝突
+        let isPointerDown = false;
+        let isDragging = false;
+        let startX = 0, startY = 0, initialX = 0, initialY = 0;
 
-        main.onmousedown = (e) => {
-            startX = e.clientX; startY = e.clientY;
-            initialX = ball.offsetLeft; initialY = ball.offsetTop;
-            isDragging = false; e.preventDefault();
-            
+        const onMove = (me) => {
+            // 關鍵防護：只有在 mousedown 後才處理移動
+            if (!isPointerDown) return;
+            const dx = me.clientX - startX;
+            const dy = me.clientY - startY;
+            if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+                isDragging = true;
+                let nextX = initialX + dx;
+                let nextY = initialY + dy;
+                const maxW = window.innerWidth - ball.offsetWidth;
+                const maxH = window.innerHeight - ball.offsetHeight;
+                if (nextX < 0) nextX = 0; if (nextX > maxW) nextX = maxW;
+                if (nextY < 0) nextY = 0; if (nextY > maxH) nextY = maxH;
+                ball.style.left = nextX + 'px';
+                ball.style.top = nextY + 'px';
+                ball.style.right = 'auto';
+                ball.style.bottom = 'auto';
+            }
+        };
+
+        const cleanupAndSnap = () => {
+            // 立即重置狀態，防止殘留
+            if (!isPointerDown) return; // 防止重複觸發
+            isPointerDown = false;
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', cleanupAndSnap);
+            main.style.cursor = 'grab';
+
+            if (!isDragging) {
+                panel.classList.toggle('open');
+            } else {
+                const screenW = window.innerWidth;
+                ball.style.transition = 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)';
+                const finalX = screenW - ball.offsetWidth - 24;
+                ball.style.left = finalX + 'px';
+                main.classList.add('ball-snapping');
+                setTimeout(() => {
+                    main.classList.remove('ball-snapping');
+                    ball.style.transition = 'none';
+                    ball.style.left = 'auto';
+                    ball.style.right = '24px';
+                    const currentTop = parseInt(ball.style.top) || 0;
+                    const maxTop = window.innerHeight - ball.offsetHeight - 24;
+                    if (currentTop < 24) ball.style.top = '24px';
+                    else if (currentTop > maxTop) ball.style.top = maxTop + 'px';
+                }, 500);
+            }
+            isDragging = false;
+        };
+
+        main.addEventListener('mousedown', (e) => {
+            // 只響應主鍵（左鍵）點擊
+            if (e.button !== 0) return;
+            e.preventDefault();
+            isPointerDown = true;
+            isDragging = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            initialX = ball.offsetLeft;
+            initialY = ball.offsetTop;
             ball.style.transition = 'none';
             main.style.cursor = 'grabbing';
+            // 在 document 上綁定，確保不丟失
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', cleanupAndSnap);
+        });
 
-            const move = (me) => {
-                const dx = me.clientX - startX; const dy = me.clientY - startY;
-                if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-                    isDragging = true;
-                    let nextX = initialX + dx;
-                    let nextY = initialY + dy;
-                    
-                    // 限制在屏幕內
-                    const maxW = window.innerWidth - ball.offsetWidth;
-                    const maxH = window.innerHeight - ball.offsetHeight;
-                    if (nextX < 0) nextX = 0; if (nextX > maxW) nextX = maxW;
-                    if (nextY < 0) nextY = 0; if (nextY > maxH) nextY = maxH;
-
-                    ball.style.left = nextX + 'px';
-                    ball.style.top = nextY + 'px';
-                    ball.style.right = 'auto'; ball.style.bottom = 'auto';
-                }
-            };
-
-            const up = () => {
-                document.removeEventListener('mousemove', move);
-                document.removeEventListener('mouseup', up);
-                main.style.cursor = 'grab';
-                
-                if (!isDragging) {
-                    panel.classList.toggle('open');
-                } else {
-                    const screenW = window.innerWidth;
-                    // 吸附動畫：平滑彈回側邊
-                    ball.style.transition = 'all 0.5s cubic-bezier(0.19, 1, 0.22, 1)';
-                    // 直接計算吸附位置，始終吸附到右邊。
-                    const finalX = screenW - ball.offsetWidth - 24;
-                    ball.style.left = finalX + 'px';
-                    
-                    main.classList.add('ball-snapping');
-                    setTimeout(() => {
-                        main.classList.remove('ball-snapping');
-                        ball.style.transition = 'none';
-                        // 切換回 right 定位，確保在視窗大小改變時位置正確
-                        ball.style.left = 'auto'; ball.style.right = '24px';
-                        
-                        // 確保 top 也不會超出可見區域 (上下邊距 24px)
-                        let currentTop = parseInt(ball.style.top);
-                        const maxTop = window.innerHeight - ball.offsetHeight - 24;
-                        if (currentTop < 24) ball.style.top = '24px';
-                        else if (currentTop > maxTop) ball.style.top = maxTop + 'px';
-                    }, 500);
-                }
-            };
-            document.addEventListener('mousemove', move);
-            document.addEventListener('mouseup', up);
-        };
+        // 額外保護：若窗口失焦也重置狀態
+        window.addEventListener('blur', () => {
+            if (isPointerDown) cleanupAndSnap();
+        });
     }
 
     function addDetailRow(data = {}) {
