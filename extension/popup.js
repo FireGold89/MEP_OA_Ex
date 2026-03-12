@@ -1,5 +1,5 @@
 /**
- * Version: 4.11.0 - BuyType ID Precision Calibration
+ * Version: 4.11.4 - List Item Display Enhancement
  * 與懸浮面板 100% 統一版本的 popup.js
  */
 
@@ -273,7 +273,10 @@ document.addEventListener('DOMContentLoaded', async function () {
             const div = document.createElement('div'); div.className = 'oa-p-item';
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="flex:1;"><strong>${p.label}</strong></div>
+                    <div style="flex:1;">
+                        <strong>${p.label}</strong>
+                        <div style="font-size:11px; color:#888; margin-top:3px;">${p.reportNo || '--'}${p.budget ? '　$ ' + p.budget : ''}</div>
+                    </div>
                     <div style="display:flex; gap:8px;">
                         <div class="edit-btn" style="cursor:pointer; padding:2px 5px;">✎</div>
                         <div class="del-btn" style="cursor:pointer; padding:2px 5px;">🗑️</div>
