@@ -6,7 +6,7 @@
 
 (function () {
     const isTop = (window.self === window.top);
-    console.log(`%cOA Bridge v4.9.3: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
+    console.log(`%cOA Bridge v4.10.0: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
 
     // 全球暫存，供人員選擇器自動匹配
     window.__OA_LAST_PROJECT = window.__OA_LAST_PROJECT || null;
@@ -18,10 +18,13 @@
 
         // 如果收到的是廣播包裹，解包
         const payload = event.data.type === "OA_BRIDGE_BROADCAST" ? event.data.payload : event.data;
-        
         if (isTop && event.data.type !== "OA_BRIDGE_BROADCAST") {
             // 🌟 頂層視窗核心邏輯：向所有子 iframe 進行廣播
             console.log("%cOA Bridge: Top-Level Signal Captured. Broadcasting to frames...", "color:blue; font-weight:bold;");
+            
+            // 診斷日誌：掃描當前頁面所有 field 欄位
+            diagnoseFields();
+            
             broadcastToFrames(window, { type: "OA_BRIDGE_BROADCAST", payload: payload });
         }
 
@@ -29,20 +32,41 @@
         processSignal(payload);
     });
 
-    /**
-     * 遞迴向所有子 iframe 發送訊息
-     */
     function broadcastToFrames(win, msg) {
         for (let i = 0; i < win.frames.length; i++) {
             try {
                 const subWin = win.frames[i];
                 subWin.postMessage(msg, "*");
+                
+                // 子視窗診斷
+                if (subWin.diagnoseFields) subWin.diagnoseFields(); 
+                
                 broadcastToFrames(subWin, msg);
             } catch (e) {
                 // 忽略跨域 iframe 導致的權限錯誤
             }
         }
     }
+
+    /**
+     * 診斷日誌：打印頁面上發現的所有 field 欄位，協助定位 ID
+     */
+    function diagnoseFields() {
+        const fields = Array.from(document.querySelectorAll('[id^="field"], [name^="field"], select'));
+        if (fields.length > 0) {
+            console.log(`%c[OA Bridge Diagnostics] Scan in ${window.location.pathname}`, "color:purple; font-weight:bold;");
+            fields.forEach(el => {
+                // 如果是 Select，嘗試找出它的標籤文字
+                if (el.tagName === 'SELECT') {
+                    const parentTd = el.closest('td');
+                    const labelTd = parentTd ? parentTd.previousElementSibling : null;
+                    const labelText = labelTd ? labelTd.innerText.trim() : "Unknown";
+                    console.log(`%cFound SELECT: ID=${el.id || el.name}, Label Context="${labelText}"`, "color: brown;");
+                }
+            });
+        }
+    }
+    window.diagnoseFields = diagnoseFields; // 暴露給全局方便遞迴調用
 
     /**
      * 處理填充或清理邏輯
@@ -59,8 +83,8 @@
 
         window.__OA_LAST_PROJECT = project;
 
-        // 核心檢查：當前窗口是否有目標欄位
-        const hasTargets = ['field1366311', 'field1366275', 'field1366310'].some(id => !!(document.getElementById(id) || document.querySelector('[name="' + id + '"]')));
+        // 核心檢查：當前窗口是否有目標欄位 (擴展 ID 列表以提高檢測機率)
+        const hasTargets = ['field1366311', 'field1366275', 'field1366310', 'field1366277', 'field1366278'].some(id => !!(document.getElementById(id) || document.querySelector('[name="' + id + '"]')));
         
         if (!hasTargets) {
             // 僅在存在 project 數據時輸出弱提示，減少控制台噪音
@@ -80,6 +104,32 @@
         };
         
         for (let id in staticMap) {
+            // 採購類別 ID 容錯：深度挖掘
+            if (id === 'field1366278') {
+                const buyTypeVal = staticMap[id];
+                // 方案 A: 嘗試已知 ID
+                const knownIds = ['field1366278', 'field1366277', 'field1366279']; 
+                let filled = false;
+                for (let aid of knownIds) {
+                    if (fillField(aid, buyTypeVal)) { filled = true; break; }
+                }
+                
+                // 方案 B: 模糊匹配 (如果 A 失敗)
+                if (!filled) {
+                    console.log("OA Bridge: Known IDs failed for BuyType, attempting fuzzy scan...");
+                    const selects = Array.from(document.querySelectorAll('select'));
+                    for (let s of selects) {
+                        const pTd = s.closest('td');
+                        const lTd = pTd ? pTd.previousElementSibling : null;
+                        if (lTd && (lTd.innerText.includes('採購類別') || lTd.innerText.includes('採購類'))) {
+                            console.log(`OA Bridge: Fuzzy match found BuyType at ID=${s.id || s.name}`);
+                            if (fillField(s.id || s.name, buyTypeVal)) { filled = true; break; }
+                        }
+                    }
+                }
+                continue;
+            }
+
             const mId = (id === 'field1366309') ? project.managerId : null;
             fillField(id, staticMap[id], mId);
         }
@@ -148,12 +198,29 @@
 
         if (el.tagName === 'SELECT') {
             let ok = "";
+            const valStr = String(val).trim();
+            const optionsInfo = Array.from(el.options).map(o => `[val:${o.value}, txt:${o.text.trim()}]`).join(", ");
+            console.log(`OA Bridge: [SELECT] Fill ${id} with "${valStr}". Options: ${optionsInfo}`);
+
             for (let o of el.options) {
-                if (o.value === String(val) || o.text.trim() === val || o.text.includes(val)) {
-                    ok = o.value; break;
+                const optVal = String(o.value).trim();
+                const optText = o.text.trim();
+                
+                // 擴大匹配範圍：值相符、文字相符、或關鍵字包含
+                if (optVal === valStr || optText === valStr || (valStr.length > 0 && optText.includes(valStr)) || (optVal.length > 0 && valStr.includes(optVal))) {
+                    ok = o.value; 
+                    console.log(`OA Bridge: [SELECT] Match Found! -> "${optText}" (Value: ${ok})`);
+                    break; 
                 }
             }
-            if (ok !== "") el.value = ok;
+            if (ok !== "") {
+                el.value = ok;
+                // 觸發 OA 內部邏輯
+                try { if (window.onsh && typeof window.onsh === 'function') window.onsh(el); } catch(e){}
+                return true; 
+            }
+            console.warn(`OA Bridge: [SELECT] No match for "${valStr}" in field ${id}`);
+            return false;
         } else {
             const finalVal = (mId && isBrowser) ? mId : (val || "");
             el.value = finalVal;
