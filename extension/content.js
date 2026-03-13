@@ -1,6 +1,6 @@
 /**
  * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.11.5 - Fixed Export Filename
+ * Version: 4.11.6 - Background Download Proxy
  */
 
 (function () {
@@ -224,7 +224,7 @@
                 <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
             </div>
 
-            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.5</div>
+            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.6</div>
         `;
         document.body.appendChild(panel);
         bindEvents();
@@ -374,18 +374,11 @@
             });
         });
         const csvContent = "\uFEFF" + h.join(",") + "\n" + rows.join("\n");
-        const b = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
-        const url = URL.createObjectURL(b);
-        // 使用固定檔名，每次匹出都覆蓋同一個檔案
-        chrome.downloads.download({
-            url: url,
-            filename: 'OA_Projects.csv',
-            conflictAction: 'overwrite',
-            saveAs: false
-        }, (downloadId) => {
-            URL.revokeObjectURL(url);
+        // content script 無法直接使用 chrome.downloads，改為 data URL 後委託 background.js 下載
+        const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+        chrome.runtime.sendMessage({ type: 'DOWNLOAD_CSV', dataUrl: dataUrl }, (res) => {
             if (chrome.runtime.lastError) {
-                console.warn('Download error:', chrome.runtime.lastError.message);
+                console.warn('OA Export: Message error -', chrome.runtime.lastError.message);
             }
         });
     }
