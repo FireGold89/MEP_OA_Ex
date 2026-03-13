@@ -1,5 +1,5 @@
 /**
- * Version: 4.11.4 - List Item Display Enhancement
+ * Version: 4.11.7 - Export Confirm Dialog
  * 與懸浮面板 100% 統一版本的 popup.js
  */
 
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         document.getElementById('btn-add-detail').onclick = () => addDetailRow();
 
-        function exportToCSV() {
+        function buildCsvDataUrl() {
             const h = ["項目標題", "物業名稱", "報價編號", "項目經理", "項目內容", "立項預算", "合約總價", "報價形式", "採購類別", "幣種", "承判商", "報價內容", "明細幣種", "金額", "邀請公司", "有效報價", "推荐理由", "中標公司", "合約幣種", "合約金額"];
             const rows = [];
             projects.forEach(p => {
@@ -122,18 +122,63 @@ document.addEventListener('DOMContentLoaded', async function () {
                     rows.push(row.map(v => `"${(String(v || '')).replace(/"/g, '""')}"`).join(","));
                 });
             });
-            const b = new Blob(["\uFEFF" + h.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8' });
-            const url = URL.createObjectURL(b);
+            const csvContent = "\uFEFF" + h.join(",") + "\n" + rows.join("\n");
+            return 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+        }
 
-            // 使用固定檔名，每次匯出都覆蓋同一個檔案
+        function triggerDownload(filename, conflictAction) {
+            const dataUrl = buildCsvDataUrl();
             chrome.downloads.download({
-                url: url,
-                filename: 'OA_Projects.csv',
-                conflictAction: 'overwrite',
+                url: dataUrl,
+                filename: filename || 'OA_Projects.csv',
+                conflictAction: conflictAction || 'overwrite',
                 saveAs: false
-            }, (downloadId) => {
-                URL.revokeObjectURL(url);
-            });
+            }, () => {});
+        }
+
+        function exportToCSV() {
+            if (projects.length === 0) return alert("尚無數據可匯出");
+
+            // 創建確認對話框
+            const existingModal = document.getElementById('oa-export-modal-popup');
+            if (existingModal) existingModal.remove();
+
+            const modal = document.createElement('div');
+            modal.id = 'oa-export-modal-popup';
+            modal.style.cssText = `
+                position:fixed; inset:0; z-index:9999;
+                display:flex; align-items:center; justify-content:center;
+                background:rgba(0,0,0,0.45);
+            `;
+            modal.innerHTML = `
+                <div style="background:#fff; border-radius:16px; padding:24px 28px; width:90%;
+                            box-shadow:0 10px 40px rgba(0,0,0,0.2); font-family:-apple-system,sans-serif;">
+                    <div style="font-size:20px; text-align:center; margin-bottom:6px">📤</div>
+                    <div style="font-weight:700; font-size:15px; text-align:center; margin-bottom:6px; color:#111">匯出確認</div>
+                    <div style="font-size:12px; color:#666; text-align:center; margin-bottom:18px; line-height:1.6">
+                        可能已存在 <strong>OA_Projects.csv</strong><br>請選擇處理方式：
+                    </div>
+                    <button id="pop-exp-overwrite" style="width:100%; padding:12px; margin-bottom:8px;
+                        border-radius:10px; border:none; background:#1d1d1f; color:#fff;
+                        font-size:13px; font-weight:600; cursor:pointer;">✅ 覆蓋舊檔</button>
+                    <button id="pop-exp-new" style="width:100%; padding:12px; margin-bottom:8px;
+                        border-radius:10px; border:1px solid #ddd; background:#f7f7f7; color:#333;
+                        font-size:13px; font-weight:600; cursor:pointer;">📅 另存新檔（加日期時間）</button>
+                    <button id="pop-exp-cancel" style="width:100%; padding:8px;
+                        border:none; background:none; color:#999; font-size:12px; cursor:pointer;">取消</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+
+            const close = () => modal.remove();
+            modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+            document.getElementById('pop-exp-cancel').onclick = close;
+            document.getElementById('pop-exp-overwrite').onclick = () => { close(); triggerDownload('OA_Projects.csv', 'overwrite'); };
+            document.getElementById('pop-exp-new').onclick = () => {
+                close();
+                const ts = new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
+                triggerDownload(`OA_Projects_${ts}.csv`, 'uniquify');
+            };
         }
 
         document.getElementById('btn-f-save').onclick = async () => {

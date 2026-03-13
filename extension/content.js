@@ -1,6 +1,6 @@
 /**
  * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.11.6 - Background Download Proxy
+ * Version: 4.11.7 - Export Confirm Dialog
  */
 
 (function () {
@@ -224,7 +224,7 @@
                 <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
             </div>
 
-            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.6</div>
+            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.7</div>
         `;
         document.body.appendChild(panel);
         bindEvents();
@@ -363,8 +363,8 @@
         renderList();
     }
 
-    function exportToCSV() {
-        if(projects.length === 0) return alert("尚無數據可匯出");
+    function buildCsvDataUrl() {
+        if(projects.length === 0) { alert("尚無數據可匯出"); return null; }
         const h = ["項目標題", "物業名稱", "報價編號", "項目經理", "項目內容", "立項預算", "合約總價", "報價形式", "採購類別", "幣種", "承判商", "報價內容", "明細幣種", "金額", "邀請公司", "有效報價", "推荐理由", "中標公司", "合約幣種", "合約金額"];
         const rows = [];
         projects.forEach(p => {
@@ -374,13 +374,72 @@
             });
         });
         const csvContent = "\uFEFF" + h.join(",") + "\n" + rows.join("\n");
-        // content script 無法直接使用 chrome.downloads，改為 data URL 後委託 background.js 下載
-        const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
-        chrome.runtime.sendMessage({ type: 'DOWNLOAD_CSV', dataUrl: dataUrl }, (res) => {
-            if (chrome.runtime.lastError) {
-                console.warn('OA Export: Message error -', chrome.runtime.lastError.message);
-            }
+        return 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+    }
+
+    function triggerDownload(filename, conflictAction) {
+        const dataUrl = buildCsvDataUrl();
+        if (!dataUrl) return;
+        chrome.runtime.sendMessage({ type: 'DOWNLOAD_CSV', dataUrl, filename, conflictAction }, (res) => {
+            if (chrome.runtime.lastError) console.warn('OA Export error:', chrome.runtime.lastError.message);
         });
+    }
+
+    function exportToCSV() {
+        if(projects.length === 0) return alert("尚無數據可匯出");
+
+        // 如果對話框已存在則移除
+        const existingModal = document.getElementById('oa-export-modal');
+        if (existingModal) existingModal.remove();
+
+        const modal = document.createElement('div');
+        modal.id = 'oa-export-modal';
+        modal.style.cssText = `
+            position:fixed; inset:0; z-index:2147483647;
+            display:flex; align-items:center; justify-content:center;
+            background:rgba(0,0,0,0.4); backdrop-filter:blur(4px);
+            animation:oa-fadein 0.15s ease;
+        `;
+        modal.innerHTML = `
+            <div style="background:#fff; border-radius:20px; padding:28px 32px; width:320px;
+                        box-shadow:0 20px 60px rgba(0,0,0,0.25); font-family:-apple-system,sans-serif;">
+                <div style="font-size:22px; text-align:center; margin-bottom:8px">📤</div>
+                <div style="font-weight:700; font-size:16px; color:#1d1d1f; text-align:center; margin-bottom:8px">匯出確認</div>
+                <div style="font-size:13px; color:#666; text-align:center; margin-bottom:24px; line-height:1.6">
+                    下載資料夾中可能已存在<br>
+                    <strong style="color:#1d1d1f">OA_Projects.csv</strong><br>
+                    請選擇處理方式：
+                </div>
+                <button id="oa-exp-overwrite" style="width:100%; padding:14px; margin-bottom:10px;
+                    border-radius:12px; border:none; background:#1d1d1f; color:#fff;
+                    font-size:14px; font-weight:600; cursor:pointer;">
+                    ✅ 覆蓋舊檔（OA_Projects.csv）
+                </button>
+                <button id="oa-exp-new" style="width:100%; padding:14px; margin-bottom:10px;
+                    border-radius:12px; border:1px solid #ddd; background:#f9f9f9; color:#1d1d1f;
+                    font-size:14px; font-weight:600; cursor:pointer;">
+                    📅 另存新檔（座日期時間）
+                </button>
+                <button id="oa-exp-cancel" style="width:100%; padding:10px;
+                    border-radius:12px; border:none; background:none; color:#999;
+                    font-size:13px; cursor:pointer;">取消</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const close = () => modal.remove();
+        modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+        document.getElementById('oa-exp-cancel').onclick = close;
+
+        document.getElementById('oa-exp-overwrite').onclick = () => {
+            close();
+            triggerDownload('OA_Projects.csv', 'overwrite');
+        };
+        document.getElementById('oa-exp-new').onclick = () => {
+            close();
+            const ts = new Date().toISOString().slice(0,16).replace('T','_').replace(':','-');
+            triggerDownload(`OA_Projects_${ts}.csv`, 'uniquify');
+        };
     }
 
     function bindEvents() {
