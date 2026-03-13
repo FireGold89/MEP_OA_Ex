@@ -1,7 +1,8 @@
+```json
 {
   "manifest_version": 3,
   "name": "採購立項自動化工具",
-  "version": "4.12.1",
+  "version": "4.12.2",
   "description": "自動填寫泛微 OA 採購立項流程表單",
   "permissions": [
     "activeTab",

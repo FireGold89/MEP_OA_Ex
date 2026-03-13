@@ -1,12 +1,12 @@
 /**
  * Weaver OA Main Bridge
- * Version: 4.9.3 - Multi-Frame Broadcast Fix
+ * Version: 4.12.2 - Validation Event Fix
  * 核心功能：全自動增減行 + 強化版人員選取器 + 跨 Iframe 廣播轉發
  */
 
 (function () {
     const isTop = (window.self === window.top);
-    console.log(`%cOA Bridge v4.11.0: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
+    console.log(`%cOA Bridge v4.12.2: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
 
     // 全球暫存，供人員選擇器自動匹配
     window.__OA_LAST_PROJECT = window.__OA_LAST_PROJECT || null;
@@ -217,10 +217,10 @@
                 el.value = ok;
                 // 觸發 OA 內部邏輯
                 try { if (window.onsh && typeof window.onsh === 'function') window.onsh(el); } catch(e){}
-                return true; 
+            } else {
+                console.warn(`OA Bridge: [SELECT] No match for "${valStr}" in field ${id}`);
+                return false;
             }
-            console.warn(`OA Bridge: [SELECT] No match for "${valStr}" in field ${id}`);
-            return false;
         } else {
             const finalVal = (mId && isBrowser) ? mId : (val || "");
             el.value = finalVal;
@@ -247,6 +247,14 @@
             const ev = new Event(t, { bubbles: true });
             el.dispatchEvent(ev);
         });
+
+        // 🌟 額外保險：直接執行內聯事件，這對某些 OA 驗證邏輯至關重要
+        try {
+            if (el.onchange && typeof el.onchange === 'function') el.onchange();
+            if (el.onblur && typeof el.onblur === 'function') el.onblur();
+        } catch (e) {
+            console.warn(`OA Bridge: Inline event trigger failed for ${id}`, e);
+        }
     }
 
     function clearAllFields() {
