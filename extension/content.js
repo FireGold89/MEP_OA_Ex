@@ -1,6 +1,6 @@
 /**
- * Version: 4.12.1 - Real-time UX Sync
- * 與懸浮面板 100% 統一版本的 popup.js
+ * Version: 4.12.2 - Validation Event Fix
+ * 採購立項自動化工具 - 核心邏輯
  */
 
 (function () {
