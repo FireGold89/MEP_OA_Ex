@@ -1,6 +1,6 @@
 /**
  * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.11.7 - Export Confirm Dialog
+ * Version: 4.12.0 - Premium UI Redesign
  */
 
 (function () {
@@ -84,9 +84,12 @@
         panel.id = 'oa-side-panel';
         panel.innerHTML = `
             <div class="ym-header">
-                <div class="ym-header-left" style="display:flex; align-items:center; gap:12px;">
+                <div class="ym-header-left" style="display:flex; align-items:center; gap:10px;">
                     <div class="ym-logo">un</div>
-                    <div style="font-weight:700; font-size:16px; color:#1d1d1f; letter-spacing:-0.5px;">採購一鍵通 <span style="font-size:10px; opacity:0.3; vertical-align:middle;">▼</span></div>
+                    <div>
+                        <div class="ym-header-title">採購一鍵通</div>
+                        <div class="ym-header-subtitle">OA 表單自動化工具</div>
+                    </div>
                 </div>
                 <div class="ym-header-right">
                     <span id="oa-btn-refresh" title="同步數據">↻</span>
@@ -95,10 +98,10 @@
             </div>
 
             <div class="oa-action-toolbar">
-                <button class="oa-tool-btn outline" id="oa-btn-add">新增</button>
-                <button class="oa-tool-btn" id="oa-btn-import-top">匯入</button>
-                <button class="oa-tool-btn" id="oa-btn-export-top">匯出</button>
-                <button class="oa-tool-btn primary" id="oa-btn-save-top">保存</button>
+                <button class="oa-tool-btn outline" id="oa-btn-add">➕ 新增</button>
+                <button class="oa-tool-btn" id="oa-btn-import-top">↑ 匯入</button>
+                <button class="oa-tool-btn" id="oa-btn-export-top">↓ 匯出</button>
+                <button class="oa-tool-btn primary" id="oa-btn-save-top">✔ 保存</button>
             </div>
 
             <div class="oa-p-tabs">
@@ -108,13 +111,12 @@
             </div>
 
             <div id="view-v-fill" class="oa-panel-body">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                    <div style="font-weight:700; font-size:15px; color:#1d1d1f;">📖 填充列表</div>
-                    <input type="text" id="oa-search-input" placeholder="搜尋項目..." style="width:140px; padding:8px 12px; border-radius:14px; border:1px solid #e5e5ea; font-size:12px; outline:none;">
+                <div style="display:flex; gap:8px; margin-bottom:12px; align-items:center;">
+                    <input type="text" id="oa-search-input" class="oa-search-input" placeholder="🔍 搜尋項目或經理...">
                 </div>
-                <div style="display:flex; gap:10px; margin-bottom:20px;">
-                    <button id="oa-btn-undo" style="flex:1; padding:10px; border-radius:12px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:12px; color:#666;">↩️ 恢復</button>
-                    <button id="oa-btn-clear" style="flex:1; padding:10px; border-radius:12px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:12px; color:#666;">🧹 清空</button>
+                <div class="oa-fill-toolbar">
+                    <button id="oa-btn-undo">↩ 恢復</button>
+                    <button id="oa-btn-clear">🧹 清空</button>
                 </div>
                 <div id="oa-disp-list"></div>
             </div>
@@ -224,7 +226,7 @@
                 <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
             </div>
 
-            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.7</div>
+            <div style="position:absolute; bottom:0; left:0; right:0; padding:10px; text-align:center; font-size:10px; color:#c0c0cc; background:#fff; border-top:1px solid var(--ym-border); letter-spacing:0.5px;">v4.12.0</div>
         `;
         document.body.appendChild(panel);
         bindEvents();
