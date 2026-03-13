@@ -1,6 +1,6 @@
 /**
- * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.12.0 - Premium UI Redesign
+ * Version: 4.12.1 - Real-time UX Sync
+ * 與懸浮面板 100% 統一版本的 popup.js
  */
 
 (function () {
@@ -65,6 +65,30 @@
                 sendResponse({ success: true });
             } else if (msg.type === "TOGGLE_FLOAT_BALL") {
                 updateVisibility();
+                // 同步更新設置頁面的開關狀態
+                const checkBall = document.getElementById('oa-check-ball-side');
+                if (checkBall) checkBall.checked = msg.visible;
+                sendResponse({ success: true });
+            } else if (msg.type === "UPDATE_SETTING") {
+                console.log("OA Content: Received Setting Update ->", msg.key, msg.value);
+                // 實時更新 UI
+                if (msg.key === "title_size") {
+                    const slider = document.getElementById('side-title-size');
+                    const valLab = document.getElementById('side-title-size-val');
+                    if (slider) slider.value = msg.value;
+                    if (valLab) valLab.textContent = msg.value + 'px';
+                    renderList();
+                } else if (msg.key === "subtitle_mode") {
+                    const ctrl = document.getElementById('side-subtitle-mode');
+                    if (ctrl) {
+                        ctrl.querySelectorAll('.oa-seg-btn').forEach(b => b.classList.toggle('active', b.dataset.value === msg.value));
+                    }
+                    renderList();
+                } else if (msg.key === "compact") {
+                    const cb = document.getElementById('side-compact-mode');
+                    if (cb) cb.checked = msg.value;
+                    renderList();
+                }
                 sendResponse({ success: true });
             }
             return true;
@@ -142,7 +166,8 @@
                 <div class="oa-p-group"><label>項目內容</label><textarea id="in-f-projectContent" rows="3"></textarea></div>
 
                 <div class="oa-grid-row">
-                    <div class="oa-p-group"><label>合約總價</label><input type="text" id="in-f-total"></div>
+                    <div class="oa-p-group">
+                        <label>合約總價</label><input type="text" id="in-f-total"></div>
                     <div class="oa-p-group">
                         <label>報價形式</label>
                         <select id="in-f-quoteType">
@@ -218,15 +243,76 @@
             </div>
 
             <div id="view-v-settings" class="oa-panel-body hidden">
-                <div style="font-weight:700; font-size:15px; margin-bottom:20px;">⚙️ 功能設置</div>
-                <div style="display:flex; align-items:center; justify-content:space-between; padding:18px; background:#fff; border-radius:18px;">
-                    <label style="font-size:14px; font-weight:600; color:#1d1d1f;">顯示懸浮輔助球</label>
-                    <input type="checkbox" id="oa-check-ball-side" style="width:22px; height:22px; cursor:pointer;">
+                <style>
+                    .s-row { display:flex; align-items:center; justify-content:space-between; padding:13px 0; border-bottom:1px solid var(--ym-border); }
+                    .s-row:last-child { border-bottom:none; }
+                    .s-label { font-size:13px; font-weight:600; color:var(--ym-text-main); }
+                    .s-desc { font-size:11px; color:var(--ym-text-muted); margin-top:2px; }
+                    .s-section { font-size:10px; font-weight:800; color:var(--ym-text-muted); text-transform:uppercase; letter-spacing:0.8px; margin:14px 0 4px; }
+                    .oa-toggle { position:relative; width:44px; height:26px; cursor:pointer; flex-shrink:0; }
+                    .oa-toggle input { opacity:0; width:0; height:0; }
+                    .oa-toggle-track { position:absolute; inset:0; background:#d0d0da; border-radius:13px; transition:background 0.25s; }
+                    .oa-toggle input:checked + .oa-toggle-track { background:var(--ym-primary); }
+                    .oa-toggle-thumb { position:absolute; top:3px; left:3px; width:20px; height:20px; background:#fff; border-radius:50%; transition:transform 0.25s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
+                    .oa-toggle input:checked ~ .oa-toggle-thumb { transform:translateX(18px); }
+                    .oa-seg-ctrl { display:flex; background:#e8e8f0; border-radius:10px; padding:3px; gap:2px; }
+                    .oa-seg-btn { padding:5px 9px; border-radius:7px; border:none; background:transparent; font-size:11px; font-weight:600; color:var(--ym-text-muted); cursor:pointer; transition:all 0.2s; }
+                    .oa-seg-btn.active { background:#fff; color:var(--ym-primary); box-shadow:0 1px 4px rgba(0,0,0,0.1); }
+                    .oa-slider { -webkit-appearance:none; width:100px; height:4px; background:#d0d0da; border-radius:2px; outline:none; }
+                    .oa-slider::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:var(--ym-primary); cursor:pointer; }
+                    .oa-slider-val { font-size:12px; font-weight:700; color:var(--ym-primary); min-width:28px; text-align:right; }
+                </style>
+
+                <div class="s-section">🎨 顯示偏好</div>
+
+                <div class="s-row">
+                    <div><div class="s-label">項目標題字體大小</div><div class="s-desc">調整列表中標題的大小</div></div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="range" class="oa-slider" id="side-title-size" min="12" max="18" value="15">
+                        <span class="oa-slider-val" id="side-title-size-val">15px</span>
+                    </div>
                 </div>
-                <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
+
+                <div class="s-row">
+                    <div><div class="s-label">副標題資訊</div><div class="s-desc">報價號旁的顯示資訊</div></div>
+                    <div class="oa-seg-ctrl" id="side-subtitle-mode">
+                        <button class="oa-seg-btn active" data-value="both">全部</button>
+                        <button class="oa-seg-btn" data-value="reportNo">報價號</button>
+                        <button class="oa-seg-btn" data-value="budget">預算</button>
+                    </div>
+                </div>
+
+                <div class="s-row">
+                    <div><div class="s-label">緊湊模式</div><div class="s-desc">縮小卡片間距</div></div>
+                    <label class="oa-toggle">
+                        <input type="checkbox" id="side-compact-mode">
+                        <div class="oa-toggle-track"></div>
+                        <div class="oa-toggle-thumb"></div>
+                    </label>
+                </div>
+
+                <div class="s-section">⚙️ 功能設置</div>
+
+                <div class="s-row">
+                    <div><div class="s-label">顯示懸浮輔助球</div><div class="s-desc">頁面右下角快速工具球</div></div>
+                    <label class="oa-toggle">
+                        <input type="checkbox" id="oa-check-ball-side" checked>
+                        <div class="oa-toggle-track"></div>
+                        <div class="oa-toggle-thumb"></div>
+                    </label>
+                </div>
+
+                <div class="s-row">
+                    <div><div class="s-label">匯出確認提示</div><div class="s-desc">匯出前詢問是否覆蓋舊檔案</div></div>
+                    <label class="oa-toggle">
+                        <input type="checkbox" id="side-export-confirm" checked>
+                        <div class="oa-toggle-track"></div>
+                        <div class="oa-toggle-thumb"></div>
+                    </label>
+                </div>
             </div>
 
-            <div style="position:absolute; bottom:0; left:0; right:0; padding:10px; text-align:center; font-size:10px; color:#c0c0cc; background:#fff; border-top:1px solid var(--ym-border); letter-spacing:0.5px;">v4.12.0</div>
+            <div style="padding:8px; text-align:center; font-size:10px; color:#c0c0cc; background:#fff; border-top:1px solid var(--ym-border); letter-spacing:0.5px; flex-shrink:0;">v4.12.1</div>
         `;
         document.body.appendChild(panel);
         bindEvents();
@@ -387,8 +473,16 @@
         });
     }
 
-    function exportToCSV() {
+    async function exportToCSV() {
         if(projects.length === 0) return alert("尚無數據可匯出");
+
+        const setting = await chrome.storage.local.get(['oa_setting_export_confirm']);
+        const needsConfirm = (setting.oa_setting_export_confirm !== false);
+
+        if (!needsConfirm) {
+            triggerDownload('OA_Projects.csv', 'overwrite');
+            return;
+        }
 
         // 如果對話框已存在則移除
         const existingModal = document.getElementById('oa-export-modal');
@@ -420,7 +514,7 @@
                 <button id="oa-exp-new" style="width:100%; padding:14px; margin-bottom:10px;
                     border-radius:12px; border:1px solid #ddd; background:#f9f9f9; color:#1d1d1f;
                     font-size:14px; font-weight:600; cursor:pointer;">
-                    📅 另存新檔（座日期時間）
+                    📅 另存新檔（加日期時間）
                 </button>
                 <button id="oa-exp-cancel" style="width:100%; padding:10px;
                     border-radius:12px; border:none; background:none; color:#999;
@@ -461,9 +555,76 @@
         tManage.onclick = () => { tManage.classList.add('active'); tFill.classList.remove('active'); tSettings.classList.remove('active'); vManage.classList.remove('hidden'); vFill.classList.add('hidden'); vSettings.classList.add('hidden'); };
         tSettings.onclick = () => { tSettings.classList.add('active'); tFill.classList.remove('active'); tManage.classList.remove('active'); vSettings.classList.remove('hidden'); vFill.classList.add('hidden'); vManage.classList.add('hidden'); };
 
+        // ===== 輔助球開關 =====
         const checkBall = document.getElementById('oa-check-ball-side');
-        chrome.storage.local.get(['oa_show_float_ball'], (res) => { if(checkBall) checkBall.checked = (res.oa_show_float_ball !== false); });
-        if(checkBall) checkBall.onchange = () => { chrome.storage.local.set({'oa_show_float_ball': checkBall.checked}); updateVisibility(); };
+        if (checkBall) {
+            chrome.storage.local.get(['oa_show_float_ball'], (res) => {
+                checkBall.checked = (res.oa_show_float_ball !== false);
+            });
+            checkBall.onchange = () => {
+                chrome.storage.local.set({ 'oa_show_float_ball': checkBall.checked });
+                updateVisibility();
+            };
+        }
+
+        // ===== 標題字體大小滑桿 =====
+        const titleSizeSlider = document.getElementById('side-title-size');
+        const titleSizeVal = document.getElementById('side-title-size-val');
+        if (titleSizeSlider) {
+            chrome.storage.local.get(['oa_setting_title_size'], (res) => {
+                const v = res.oa_setting_title_size || 15;
+                titleSizeSlider.value = v;
+                titleSizeVal.textContent = v + 'px';
+            });
+            titleSizeSlider.oninput = () => {
+                const v = titleSizeSlider.value;
+                titleSizeVal.textContent = v + 'px';
+                chrome.storage.local.set({ 'oa_setting_title_size': parseInt(v) });
+                renderList();
+            };
+        }
+
+        // ===== 副標題顯示模式 =====
+        const subtitleCtrl = document.getElementById('side-subtitle-mode');
+        if (subtitleCtrl) {
+            chrome.storage.local.get(['oa_setting_subtitle_mode'], (res) => {
+                const mode = res.oa_setting_subtitle_mode || 'both';
+                subtitleCtrl.querySelectorAll('.oa-seg-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.value === mode);
+                });
+            });
+            subtitleCtrl.querySelectorAll('.oa-seg-btn').forEach(btn => {
+                btn.onclick = () => {
+                    subtitleCtrl.querySelectorAll('.oa-seg-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    chrome.storage.local.set({ 'oa_setting_subtitle_mode': btn.dataset.value });
+                    renderList();
+                };
+            });
+        }
+
+        // ===== 緊湊模式 =====
+        const compactCheck = document.getElementById('side-compact-mode');
+        if (compactCheck) {
+            chrome.storage.local.get(['oa_setting_compact'], (res) => {
+                compactCheck.checked = !!res.oa_setting_compact;
+            });
+            compactCheck.onchange = () => {
+                chrome.storage.local.set({ 'oa_setting_compact': compactCheck.checked });
+                renderList();
+            };
+        }
+
+        // ===== 匯出確認開關 =====
+        const exportConfirmCheck = document.getElementById('side-export-confirm');
+        if (exportConfirmCheck) {
+            chrome.storage.local.get(['oa_setting_export_confirm'], (res) => {
+                exportConfirmCheck.checked = (res.oa_setting_export_confirm !== false);
+            });
+            exportConfirmCheck.onchange = () => {
+                chrome.storage.local.set({ 'oa_setting_export_confirm': exportConfirmCheck.checked });
+            };
+        }
 
         document.getElementById('oa-search-input').oninput = (e) => renderList(e.target.value.trim());
         document.getElementById('oa-btn-undo').onclick = () => window.postMessage({type: "OA_LINK_FILL", project: {label:"恢復備份", details:[]}}, "*");
@@ -560,59 +721,84 @@
         };
     }
 
-    function renderList(query = "") {
+    async function renderList(query = "") {
         const listContainer = document.getElementById('oa-disp-list'); if (!listContainer) return;
+
+        // 讀取設置
+        const settings = await chrome.storage.local.get([
+            'oa_setting_title_size',
+            'oa_setting_subtitle_mode',
+            'oa_setting_compact'
+        ]);
+
+        const titleSize = settings.oa_setting_title_size || 15;
+        const subMode = settings.oa_setting_subtitle_mode || 'both';
+        const isCompact = !!settings.oa_setting_compact;
+
         let filtered = projects;
         if (query) {
             const q = query.toLowerCase();
             filtered = projects.filter(p => (p.label && p.label.toLowerCase().includes(q)));
         }
+
         listContainer.innerHTML = filtered.length === 0 ? '<p style="text-align:center; color:#ccd; padding:40px; font-size:12px;">尚無記錄</p>' : '';
         filtered.forEach(p => {
-            const div = document.createElement('div'); div.className = 'oa-p-item';
+            const div = document.createElement('div');
+            div.className = 'oa-p-item';
+
+            // 緊湊模式樣式
+            if (isCompact) {
+                div.style.padding = '10px 14px';
+                div.style.marginBottom = '6px';
+            }
+
+            // 構建副標題內容
+            let subContent = "";
+            if (subMode === 'both') {
+                subContent = `${p.reportNo || '--'}${p.budget ? '　$ ' + p.budget : ''}`;
+            } else if (subMode === 'reportNo') {
+                subContent = p.reportNo || '--';
+            } else if (subMode === 'budget') {
+                subContent = p.budget ? '$ ' + p.budget : '--';
+            }
+
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="flex:1;">
-                        <div style="font-weight:700; font-size:15px; color:#1d1d1f; margin-bottom:4px;">${p.label}</div>
-                        <div style="font-size:11px; color:#86868b; letter-spacing:0.5px;">${p.reportNo || '--'}${p.budget ? '　$ ' + p.budget : ''}</div>
+                    <div style="flex:1; overflow:hidden;">
+                        <div style="font-weight:700; font-size:${titleSize}px; color:#1d1d1f; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.label}</div>
+                        <div style="font-size:11px; color:#86868b; letter-spacing:0.5px;">${subContent}</div>
                     </div>
-                    <div style="display:flex; gap:16px;">
-                        <span class="edit-btn" style="cursor:pointer; font-size:18px; opacity:0.3; transition:opacity 0.2s;">✎</span>
-                        <span class="del-btn" style="cursor:pointer; font-size:18px; color:#ff4d4f; opacity:0.3; transition:opacity 0.2s;">🗑</span>
+                    <div style="display:flex; gap:14px; margin-left:12px; flex-shrink:0;">
+                        <span class="edit-btn" style="cursor:pointer; font-size:16px; opacity:0.3; transition:opacity 0.2s;">✎</span>
+                        <span class="del-btn" style="cursor:pointer; font-size:16px; color:#ff4d4f; opacity:0.3; transition:opacity 0.2s;">🗑</span>
                     </div>
                 </div>
             `;
+            // ... (其餘邏輯不變)
             div.onclick = (e) => {
                 if (e.target.classList.contains('edit-btn') || e.target.classList.contains('del-btn')) return;
                 const normP = normalizeProjectData(p);
                 window.postMessage({type: "OA_LINK_FILL", project: normP}, "*");
+                const originalBg = div.style.background;
                 div.style.background = '#f2f2f7';
-                setTimeout(() => div.style.background = '#fff', 200);
+                setTimeout(() => div.style.background = originalBg || '#fff', 200);
             };
             div.querySelector('.edit-btn').onclick=(e)=>{
                 e.stopPropagation(); document.getElementById('in-f-id').value=p.id;
                 document.getElementById('in-f-managerId').value = p.managerId || "";
                 
-                // 🌟 強化匹配邏輯：支持 Value 與 Text 雙向匹配
                 fields.forEach(f=>{
                     const el=document.getElementById('in-f-'+f);
                     if(el) {
                         const val = p[f] || '';
                         if (el.tagName === 'SELECT') {
-                            console.log(`OA Edit: Setting select [${f}] to [${val}]`);
                             let found = false;
                             for(let opt of el.options) {
-                                // 強制轉為字串進行精確或文字匹配
                                 if(opt.value === String(val) || opt.text.trim() === String(val).trim()) {
-                                    el.value = opt.value;
-                                    console.log(`OA Edit: Matched [${opt.text}] (value:${opt.value})`);
-                                    found = true; break;
+                                    el.value = opt.value; found = true; break;
                                 }
                             }
-                            if(!found) {
-                                console.warn(`OA Edit: Field [${f}] val [${val}] not found in options`);
-                                el.value = "";
-                            }
+                            if(!found) el.value = "";
                         } else {
                             el.value = val;
                         }

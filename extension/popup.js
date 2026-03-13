@@ -1,5 +1,5 @@
 /**
- * Version: 4.11.7 - Export Confirm Dialog
+ * Version: 4.12.1 - Real-time UX Sync
  * 與懸浮面板 100% 統一版本的 popup.js
  */
 
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         tabManage.onclick = () => { tabManage.classList.add('active'); tabFill.classList.remove('active'); tabSettings.classList.remove('active'); viewManage.classList.remove('hidden'); viewFill.classList.add('hidden'); viewSettings.classList.add('hidden'); };
         tabSettings.onclick = () => { tabSettings.classList.add('active'); tabFill.classList.remove('active'); tabManage.classList.remove('active'); viewSettings.classList.remove('hidden'); viewFill.classList.add('hidden'); viewManage.classList.add('hidden'); };
 
-        // 懸浮輔助球開關邏輯
+        // ===== 懸浮輔助球開關 =====
         const checkBall = document.getElementById('oa-check-ball');
         if (checkBall) {
             chrome.storage.local.get(['oa_show_float_ball'], (res) => {
@@ -104,6 +104,75 @@ document.addEventListener('DOMContentLoaded', async function () {
                 const visible = checkBall.checked;
                 chrome.storage.local.set({ 'oa_show_float_ball': visible });
                 sendMessageToActiveTab({ type: "TOGGLE_FLOAT_BALL", visible: visible });
+            };
+        }
+
+        // ===== 標題字體大小滑桿 =====
+        const titleSizeSlider = document.getElementById('set-title-size');
+        const titleSizeVal = document.getElementById('set-title-size-val');
+        if (titleSizeSlider) {
+            chrome.storage.local.get(['oa_setting_title_size'], (res) => {
+                const v = res.oa_setting_title_size || 15;
+                titleSizeSlider.value = v;
+                titleSizeVal.textContent = v + 'px';
+            });
+            titleSizeSlider.oninput = () => {
+                const v = titleSizeSlider.value;
+                titleSizeVal.textContent = v + 'px';
+                chrome.storage.local.set({ 'oa_setting_title_size': parseInt(v) });
+                // 實時宣傳到活躍分頁
+                sendMessageToActiveTab({ type: "UPDATE_SETTING", key: "title_size", value: parseInt(v) });
+                // 實時重新渲染本地列表
+                const q = document.getElementById('oa-search-input')?.value.trim() || "";
+                renderList(q);
+            };
+        }
+
+        // ===== 副標題顯示模式 =====
+        const subtitleCtrl = document.getElementById('set-subtitle-mode');
+        if (subtitleCtrl) {
+            chrome.storage.local.get(['oa_setting_subtitle_mode'], (res) => {
+                const mode = res.oa_setting_subtitle_mode || 'both';
+                subtitleCtrl.querySelectorAll('.oa-seg-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.value === mode);
+                });
+            });
+            subtitleCtrl.querySelectorAll('.oa-seg-btn').forEach(btn => {
+                btn.onclick = () => {
+                    subtitleCtrl.querySelectorAll('.oa-seg-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    chrome.storage.local.set({ 'oa_setting_subtitle_mode': btn.dataset.value });
+                    sendMessageToActiveTab({ type: "UPDATE_SETTING", key: "subtitle_mode", value: btn.dataset.value });
+                    // 實時重新渲染本地列表
+                    const q = document.getElementById('oa-search-input')?.value.trim() || "";
+                    renderList(q);
+                };
+            });
+        }
+
+        // ===== 緊湊模式 =====
+        const compactCheck = document.getElementById('set-compact-mode');
+        if (compactCheck) {
+            chrome.storage.local.get(['oa_setting_compact'], (res) => {
+                compactCheck.checked = !!res.oa_setting_compact;
+            });
+            compactCheck.onchange = () => {
+                chrome.storage.local.set({ 'oa_setting_compact': compactCheck.checked });
+                sendMessageToActiveTab({ type: "UPDATE_SETTING", key: "compact", value: compactCheck.checked });
+                // 實時重新渲染本地列表
+                const q = document.getElementById('oa-search-input')?.value.trim() || "";
+                renderList(q);
+            };
+        }
+
+        // ===== 匯出確認開關 =====
+        const exportConfirmCheck = document.getElementById('set-export-confirm');
+        if (exportConfirmCheck) {
+            chrome.storage.local.get(['oa_setting_export_confirm'], (res) => {
+                exportConfirmCheck.checked = (res.oa_setting_export_confirm !== false);
+            });
+            exportConfirmCheck.onchange = () => {
+                chrome.storage.local.set({ 'oa_setting_export_confirm': exportConfirmCheck.checked });
             };
         }
 
@@ -136,8 +205,16 @@ document.addEventListener('DOMContentLoaded', async function () {
             }, () => {});
         }
 
-        function exportToCSV() {
+        async function exportToCSV() {
             if (projects.length === 0) return alert("尚無數據可匯出");
+
+            const setting = await chrome.storage.local.get(['oa_setting_export_confirm']);
+            const needsConfirm = (setting.oa_setting_export_confirm !== false);
+
+            if (!needsConfirm) {
+                triggerDownload('OA_Projects.csv', 'overwrite');
+                return;
+            }
 
             // 創建確認對話框
             const existingModal = document.getElementById('oa-export-modal-popup');
@@ -303,8 +380,19 @@ document.addEventListener('DOMContentLoaded', async function () {
         renderList(searchInput ? searchInput.value.trim() : "");
     }
 
-    function renderList(query = "") {
+    async function renderList(query = "") {
         const list = document.getElementById('oa-disp-list'); if (!list) return;
+
+        // 讀取設置
+        const settings = await chrome.storage.local.get([
+            'oa_setting_title_size',
+            'oa_setting_subtitle_mode',
+            'oa_setting_compact'
+        ]);
+
+        const titleSize = settings.oa_setting_title_size || 15;
+        const subMode = settings.oa_setting_subtitle_mode || 'both';
+        const isCompact = !!settings.oa_setting_compact;
 
         let filtered = projects;
         if (query) {
@@ -318,19 +406,44 @@ document.addEventListener('DOMContentLoaded', async function () {
 
         list.innerHTML = filtered.length === 0 ? `<p style="padding:40px; color:#999; text-align:center;">${query ? '找不到匹配項目' : '尚無記錄'}</p>` : '';
         filtered.forEach(p => {
-            const div = document.createElement('div'); div.className = 'oa-p-item';
+            const div = document.createElement('div');
+            div.className = 'oa-p-item';
+
+            // 緊湊模式樣式
+            if (isCompact) {
+                div.style.padding = '10px 14px';
+                div.style.marginBottom = '6px';
+            }
+
+            // 構建副標題內容
+            let subContent = "";
+            if (subMode === 'both') {
+                subContent = `${p.reportNo || '--'}${p.budget ? '　$ ' + p.budget : ''}`;
+            } else if (subMode === 'reportNo') {
+                subContent = p.reportNo || '--';
+            } else if (subMode === 'budget') {
+                subContent = p.budget ? '$ ' + p.budget : '--';
+            }
+
             div.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <div style="flex:1;">
-                        <strong>${p.label}</strong>
-                        <div style="font-size:11px; color:#888; margin-top:3px;">${p.reportNo || '--'}${p.budget ? '　$ ' + p.budget : ''}</div>
+                    <div style="flex:1; overflow:hidden;">
+                        <div style="font-weight:700; font-size:${titleSize}px; color:#1d1d1f; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.label}</div>
+                        <div style="font-size:11px; color:#86868b; letter-spacing:0.5px;">${subContent}</div>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <div class="edit-btn" style="cursor:pointer; padding:2px 5px;">✎</div>
-                        <div class="del-btn" style="cursor:pointer; padding:2px 5px;">🗑️</div>
+                    <div style="display:flex; gap:12px; margin-left:12px; flex-shrink:0;">
+                        <div class="edit-btn" style="cursor:pointer; font-size:16px; opacity:0.3; transition:opacity 0.2s;">✎</div>
+                        <div class="del-btn" style="cursor:pointer; font-size:16px; color:#ff4d4f; opacity:0.3; transition:opacity 0.2s;">🗑</div>
                     </div>
                 </div>`;
-            div.querySelector('div[style*="flex:1"]').onclick = () => { console.log("Filling Project:", p); runFill(p); };
+            div.onclick = (e) => {
+                if (e.target.classList.contains('edit-btn') || e.target.classList.contains('del-btn')) return;
+                console.log("Filling Project:", p);
+                runFill(p);
+                const originalBg = div.style.background;
+                div.style.background = '#f2f2f7';
+                setTimeout(() => div.style.background = originalBg || '#fff', 200);
+            };
             div.querySelector('.edit-btn').onclick = (e) => {
                 e.stopPropagation(); document.getElementById('in-f-id').value = p.id; document.getElementById('in-f-managerId').value = p.managerId || "";
                 fields.forEach(f => { if (inputs[f]) inputs[f].value = p[f] || ""; });

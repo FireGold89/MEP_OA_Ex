@@ -3,156 +3,313 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>採購一鍵通 - 彈窗版</title>
+    <title>採購一鍵通</title>
     <link rel="stylesheet" href="content.css">
     <style>
-        /* 覆寫部分懸浮面板的絕對定位和陰影，使其適應 Popup 固定大小 */
+        /* ===== Popup-specific overrides ===== */
+        * { box-sizing: border-box; }
+
         body {
             margin: 0;
             padding: 0;
-            width: 360px;
-            /* 固定彈窗寬度 */
-            max-height: 600px;
-            overflow-y: auto;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #f7f9fc;
+            width: 380px;
+            min-height: 560px;
+            max-height: 640px;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+            background: var(--ym-bg, #f4f4f8);
         }
 
         #oa-side-panel {
-            /* 移除固定定位、陰影等，使其自然流動 */
             position: static;
             width: 100%;
-            height: auto;
+            height: 640px;
             box-shadow: none;
             border-radius: 0;
+            border: none;
             transform: none !important;
             transition: none !important;
-            margin: 0;
-            display: flex;
-            flex-direction: column; /* 改為垂直堆疊，使 Toolbar 在頂部 */
-            /* Ensure it is displayed, ignoring content.js hide logic */
-            visibility: visible;
+            opacity: 1 !important;
         }
 
-        /* 隱藏關閉按鈕，因彈窗不需要 */
-        #oa-panel-close {
-            display: none !important;
-        }
+        #oa-panel-close { display: none !important; }
 
-        /* 微調輸入框，防止在彈窗內被擠壓 */
         .oa-p-group input,
         .oa-p-group textarea,
-        .oa-p-group select {
-            box-sizing: border-box;
-            width: 100%;
+        .oa-p-group select { box-sizing: border-box; width: 100%; }
+
+        /* Settings list style */
+        .oa-settings-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--ym-border, rgba(0,0,0,0.07));
+        }
+        .oa-settings-row:last-child { border-bottom: none; }
+        .oa-settings-label {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ym-text-main, #111118);
+        }
+        .oa-settings-desc {
+            font-size: 11px;
+            color: var(--ym-text-muted, #9898aa);
+            margin-top: 2px;
+        }
+        .oa-settings-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
         }
 
-        /* 防止明細行刪除按鈕重疊 */
-        .oa-detail-row {
-            padding-right: 25px !important;
+        /* Toggle Switch */
+        .oa-toggle {
+            position: relative;
+            width: 44px;
+            height: 26px;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .oa-toggle input { opacity: 0; width: 0; height: 0; }
+        .oa-toggle-track {
+            position: absolute;
+            inset: 0;
+            background: #d0d0da;
+            border-radius: 13px;
+            transition: background 0.25s;
+        }
+        .oa-toggle input:checked + .oa-toggle-track { background: var(--ym-primary, #5b5ef6); }
+        .oa-toggle-thumb {
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform 0.25s;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+        .oa-toggle input:checked ~ .oa-toggle-thumb { transform: translateX(18px); }
+
+        /* Segmented Control */
+        .oa-seg-ctrl {
+            display: flex;
+            background: #e8e8f0;
+            border-radius: 10px;
+            padding: 3px;
+            gap: 2px;
+        }
+        .oa-seg-btn {
+            padding: 5px 10px;
+            border-radius: 7px;
+            border: none;
+            background: transparent;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--ym-text-muted, #9898aa);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .oa-seg-btn.active {
+            background: #fff;
+            color: var(--ym-primary, #5b5ef6);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Settings section heading */
+        .oa-settings-section {
+            font-size: 10px;
+            font-weight: 800;
+            color: var(--ym-text-muted, #9898aa);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin: 16px 0 4px;
+        }
+
+        /* Slider */
+        .oa-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100px;
+            height: 4px;
+            background: #d0d0da;
+            border-radius: 2px;
+            outline: none;
+        }
+        .oa-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--ym-primary, #5b5ef6);
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(91,94,246,0.4);
+        }
+        .oa-slider-val {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--ym-primary, #5b5ef6);
+            min-width: 28px;
+            text-align: right;
         }
     </style>
 </head>
 
 <body>
+    <div id="oa-side-panel" class="open">
 
-    <!-- 完全複製自 content.js 的 panel 結構 -->
-    <div id="oa-side-panel" class="open"> <!-- 預設為 open -->
-        <div id="oa-panel-header" style="flex-direction: column; align-items: stretch; height: auto; padding: 10px 15px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                <div class="oa-header-left">
-                    <div class="oa-logo">un</div>
-                    <div class="oa-title-group">
-                        <span style="font-size:16px;">💾</span>
-                        <span>採購一鍵通</span>
-                        <span style="font-size:10px; opacity:0.5;">▼</span>
-                    </div>
+        <!-- ===== Header ===== -->
+        <div class="ym-header">
+            <div class="ym-header-left" style="display:flex; align-items:center; gap:10px;">
+                <div class="ym-logo">un</div>
+                <div>
+                    <div class="ym-header-title">採購一鍵通</div>
+                    <div class="ym-header-subtitle">OA 表單自動化工具</div>
                 </div>
-                <div class="oa-header-right">
-                    <span class="oa-header-icon" title="更多設置">···</span>
-                    <span class="oa-header-icon" id="oa-btn-refresh" title="同步數據">↻</span>
-                    <span class="oa-header-icon close" id="oa-panel-close" title="隱藏視窗">✕</span>
-                </div>
+            </div>
+            <div class="ym-header-right">
+                <span id="oa-btn-refresh" title="同步數據">↻</span>
+                <span id="oa-panel-close" title="隱藏視窗">✕</span>
             </div>
         </div>
 
-        <div class="oa-action-toolbar"
-            style="padding:10px 15px; display:flex; flex-direction: row; gap:6px; background:#fff; border-bottom:1px solid #eee;">
-            <button class="oa-tool-btn" id="oa-btn-add" title="新增項目"
-                style="flex:1; padding:8px 0; border:1px solid #764ba2; color:#764ba2; background:#fff; border-radius:6px; cursor:pointer; font-size:12px; font-weight: 500;">新增</button>
-            <button class="oa-tool-btn" id="oa-btn-import" title="匯入 CSV"
-                style="flex:1; padding:8px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:12px;">匯入</button>
-            <button class="oa-tool-btn" id="oa-btn-export" title="匯出 CSV"
-                style="flex:1; padding:8px 0; border:1px solid #eee; color:#666; background:#fff; border-radius:6px; cursor:pointer; font-size:12px;">匯出</button>
-            <button class="oa-tool-btn" id="oa-btn-save" title="保存當前"
-                style="flex:1.2; padding:8px 0; border:none; color:#fff; background:linear-gradient(135deg, #764ba2 0%, #667eea 100%); border-radius:6px; cursor:pointer; font-size:12px; font-weight:bold;">保存</button>
+        <!-- ===== Action Toolbar ===== -->
+        <div class="oa-action-toolbar">
+            <button class="oa-tool-btn outline" id="oa-btn-add" title="新增項目">➕ 新增</button>
+            <button class="oa-tool-btn" id="oa-btn-import" title="匯入 CSV">↑ 匯入</button>
+            <button class="oa-tool-btn" id="oa-btn-export" title="匯出 CSV">↓ 匯出</button>
+            <button class="oa-tool-btn primary" id="oa-btn-save" title="保存當前">✔ 保存</button>
+            <input type="file" id="in-f-file" class="hidden" accept=".csv">
         </div>
 
+        <!-- ===== Tabs ===== -->
         <div class="oa-p-tabs">
             <div class="oa-p-tab active" id="tab-v-fill">快速填充</div>
             <div class="oa-p-tab" id="tab-v-manage">項目管理</div>
             <div class="oa-p-tab" id="tab-v-settings">更多設置</div>
         </div>
 
+        <!-- ===== Fill View ===== -->
         <div id="view-v-fill" class="oa-panel-body">
-            <!-- ... existing content ... -->
-            <div class="oa-section-header" style="display:flex; justify-content:space-between; align-items:center;">
-                <div class="oa-section-title">📖 填充列表</div>
-                <div class="oa-search-box" style="margin-left:auto;">
-                    <input type="text" id="oa-search-input" placeholder="搜尋項目或經理..."
-                        style="width:120px; padding:4px 8px; border-radius:12px; border:1px solid #ddd; font-size:12px; outline:none;">
-                </div>
+            <div style="display:flex; gap:8px; margin-bottom:12px;">
+                <input type="text" id="oa-search-input" class="oa-search-input" placeholder="🔍 搜尋項目或經理...">
             </div>
-            <div class="oa-fill-toolbar" style="padding:0 10px 10px 10px; display:flex; gap:8px;">
-                <button id="oa-btn-undo" class="oa-tool-btn"
-                    style="flex:1; padding:5px; border-radius:6px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:11px;">↩️
-                    恢復</button>
-                <button id="oa-btn-clear" class="oa-tool-btn"
-                    style="flex:1; padding:5px; border-radius:6px; border:1px solid #eee; background:#fff; cursor:pointer; font-size:11px;">🧹
-                    清空</button>
+            <div class="oa-fill-toolbar">
+                <button id="oa-btn-undo">↩ 恢復</button>
+                <button id="oa-btn-clear">🧹 清空</button>
             </div>
             <div id="oa-disp-list"></div>
         </div>
 
+        <!-- ===== Settings View ===== -->
         <div id="view-v-settings" class="oa-panel-body hidden">
-            <div class="oa-section-title">⚙️ 功能設置</div>
-            <div class="oa-p-group" style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #eee;">
-                <label style="margin:0;">顯示懸浮輔助球</label>
-                <input type="checkbox" id="oa-check-ball" style="width:20px; height:20px; cursor:pointer;">
+
+            <div class="oa-settings-section">🎨 顯示偏好</div>
+
+            <div class="oa-settings-row">
+                <div>
+                    <div class="oa-settings-label">項目標題字體大小</div>
+                    <div class="oa-settings-desc">調整快速填充列表中的標題大小</div>
+                </div>
+                <div class="oa-settings-control">
+                    <input type="range" class="oa-slider" id="set-title-size" min="12" max="18" value="15">
+                    <span class="oa-slider-val" id="set-title-size-val">15px</span>
+                </div>
             </div>
-            <div style="font-size:11px; color:#999; margin-top:10px;">
-                開啟後，頁面右下側將出現圓形工具球，方便您快速執行新增、匯入等操作。
-            </div>
-        </div>
 
-        <div id="view-v-manage" class="oa-panel-body hidden">
-            <h4 id="oa-p-title" style="margin-top:0;">新增項目</h4>
-            <input type="hidden" id="in-f-id">
-            <input type="hidden" id="in-f-managerId">
-
-            <div class="oa-p-group"><label>項目標題 (顯示用)</label><input type="text" id="in-f-label"
-                    placeholder="例如：信成 - 電器材料"></div>
-
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                <div class="oa-p-group"><label>物業名稱</label><input type="text" id="in-f-propertyName"
-                        placeholder="例如: 九龍灣車廠"></div>
-                <div class="oa-p-group">
-                    <label>項目經理</label>
-                    <div style="display:flex;gap:4px;">
-                        <input type="text" id="in-f-manager" style="flex:1;" placeholder="輸入姓名或選取">
-                        <button id="btn-f-pick"
-                            style="padding:4px 10px; border-radius:8px; border:1px solid #ddd; cursor:pointer; background:white;">🔍</button>
+            <div class="oa-settings-row">
+                <div>
+                    <div class="oa-settings-label">副標題資訊</div>
+                    <div class="oa-settings-desc">報價編號旁顯示的資訊</div>
+                </div>
+                <div class="oa-settings-control">
+                    <div class="oa-seg-ctrl" id="set-subtitle-mode">
+                        <button class="oa-seg-btn active" data-value="both">全部</button>
+                        <button class="oa-seg-btn" data-value="reportNo">報價號</button>
+                        <button class="oa-seg-btn" data-value="budget">預算</button>
                     </div>
                 </div>
             </div>
 
-            <div class="oa-p-group"><label>美博報價編號</label><input type="text" id="in-f-reportNo"
-                    placeholder="例如: MS/Q1241/24/kp"></div>
+            <div class="oa-settings-row">
+                <div>
+                    <div class="oa-settings-label">緊湊模式</div>
+                    <div class="oa-settings-desc">縮小卡片間距使列表更緊湊</div>
+                </div>
+                <div class="oa-settings-control">
+                    <label class="oa-toggle">
+                        <input type="checkbox" id="set-compact-mode">
+                        <div class="oa-toggle-track"></div>
+                        <div class="oa-toggle-thumb"></div>
+                    </label>
+                </div>
+            </div>
 
-            <div class="oa-p-group"><label>項目內容</label><textarea id="in-f-projectContent" rows="3"
-                    placeholder="項目內容"></textarea></div>
+            <div class="oa-settings-section">⚙️ 功能設置</div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="oa-settings-row">
+                <div>
+                    <div class="oa-settings-label">顯示懸浮輔助球</div>
+                    <div class="oa-settings-desc">頁面右下角快速工具球</div>
+                </div>
+                <div class="oa-settings-control">
+                    <label class="oa-toggle">
+                        <input type="checkbox" id="oa-check-ball" checked>
+                        <div class="oa-toggle-track"></div>
+                        <div class="oa-toggle-thumb"></div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="oa-settings-row">
+                <div>
+                    <div class="oa-settings-label">匯出確認提示</div>
+                    <div class="oa-settings-desc">匯出前詢問是否覆蓋舊檔案</div>
+                </div>
+                <div class="oa-settings-control">
+                    <label class="oa-toggle">
+                        <input type="checkbox" id="set-export-confirm" checked>
+                        <div class="oa-toggle-track"></div>
+                        <div class="oa-toggle-thumb"></div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="oa-settings-section">📁 數據管理</div>
+            <div class="oa-settings-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+                <div style="display:flex; gap:8px;">
+                    <button id="btn-f-export" style="flex:1; padding:10px; border-radius:12px; border:1px solid var(--ym-border); background:#fff; cursor:pointer; font-size:12px; font-weight:600; color:var(--ym-text-secondary);">↓ 匯出 CSV</button>
+                    <button id="btn-f-import" style="flex:1; padding:10px; border-radius:12px; border:1px solid var(--ym-border); background:#fff; cursor:pointer; font-size:12px; font-weight:600; color:var(--ym-text-secondary);">↑ 匯入 CSV</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== Manage View ===== -->
+        <div id="view-v-manage" class="oa-panel-body hidden">
+            <h4 id="oa-p-title" style="margin:0 0 16px; font-size:15px; font-weight:700; color:var(--ym-text-main);">新增項目</h4>
+            <input type="hidden" id="in-f-id">
+            <input type="hidden" id="in-f-managerId">
+
+            <div class="oa-p-group"><label>項目標題（顯示用）</label><input type="text" id="in-f-label" placeholder="例如：信成 - 電器材料"></div>
+
+            <div class="oa-grid-row">
+                <div class="oa-p-group"><label>物業名稱</label><input type="text" id="in-f-propertyName" placeholder="例如: 九龍灣車廠"></div>
+                <div class="oa-p-group">
+                    <label>項目經理</label>
+                    <div class="oa-picker-container">
+                        <input type="text" id="in-f-manager" placeholder="輸入姓名">
+                        <button id="btn-f-pick" class="oa-picker-btn">🔍</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="oa-p-group"><label>美博報價編號</label><input type="text" id="in-f-reportNo" placeholder="例如: MS/Q1241/24/kp"></div>
+            <div class="oa-p-group"><label>項目內容</label><textarea id="in-f-projectContent" rows="2" placeholder="項目內容描述"></textarea></div>
+
+            <div class="oa-grid-row">
                 <div class="oa-p-group"><label>合約總價</label><input type="text" id="in-f-total"></div>
                 <div class="oa-p-group">
                     <label>報價形式</label>
@@ -166,7 +323,7 @@
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="oa-grid-row">
                 <div class="oa-p-group">
                     <label>採購類別</label>
                     <select id="in-f-buyType">
@@ -183,7 +340,7 @@
                 <div class="oa-p-group"><label>立項預算金額</label><input type="text" id="in-f-budget"></div>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="oa-grid-row">
                 <div class="oa-p-group">
                     <label>幣種</label>
                     <select id="in-f-currency">
@@ -195,21 +352,19 @@
                 </div>
             </div>
 
-            <div class="oa-section-title">📦 報價明細</div>
+            <div class="oa-section-label">📦 報價明細</div>
             <div id="oa-detail-list" style="margin-bottom:10px;"></div>
-            <button id="btn-add-detail"
-                style="width:100%; padding:8px; border:1px dashed #764ba2; color:#764ba2; background:none; border-radius:10px; cursor:pointer; margin-bottom:15px; font-weight:600;">+
-                添加明細</button>
+            <button id="btn-add-detail" style="width:100%; padding:10px; border:1.5px dashed var(--ym-primary); color:var(--ym-primary); background:var(--ym-primary-soft); border-radius:12px; cursor:pointer; margin-bottom:16px; font-weight:600; font-size:13px; transition:all 0.2s;">+ 添加明細</button>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-                <div class="oa-p-group"><label>邀請公司 (間)</label><input type="text" id="in-f-inviteCount"></div>
-                <div class="oa-p-group"><label>有效報價/回復 (份)</label><input type="text" id="in-f-replyCount"></div>
+            <div class="oa-grid-row">
+                <div class="oa-p-group"><label>邀請公司（間）</label><input type="text" id="in-f-inviteCount"></div>
+                <div class="oa-p-group"><label>有效報價（份）</label><input type="text" id="in-f-replyCount"></div>
             </div>
 
             <div class="oa-p-group"><label>理由</label><textarea id="in-f-reason" rows="2"></textarea></div>
             <div class="oa-p-group"><label>中標公司</label><input type="text" id="in-f-winnerName"></div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="oa-grid-row">
                 <div class="oa-p-group">
                     <label>合約幣種</label>
                     <select id="in-f-contractCurrency">
@@ -223,21 +378,14 @@
             </div>
 
             <button id="btn-f-save" class="oa-p-btn-action">儲存項目</button>
-            <button id="btn-f-save-as-new" class="oa-p-btn-action hidden"
-                style="background:none; border:1px solid #764ba2; color:#764ba2; margin-top:10px;">另存為新項目</button>
-            <div id="btn-f-cancel"
-                style="text-align:center; margin-top:10px; font-size:12px; color:#999; cursor:pointer;" class="hidden">
-                取消編輯</div>
-
-            <div style="margin-top:20px; border-top:1px solid #eee; padding-top:10px; display:flex; gap:8px;">
-                <button id="btn-f-export" style="flex:1; font-size:11px; padding:6px; cursor:pointer;">匯出</button>
-                <button id="btn-f-import" style="flex:1; font-size:11px; padding:6px; cursor:pointer;">匯入</button>
-                <input type="file" id="in-f-file" class="hidden" accept=".csv">
-            </div>
+            <button id="btn-f-save-as-new" class="oa-p-btn-action hidden" style="background:transparent; border:1.5px solid var(--ym-primary); color:var(--ym-primary); margin-top:8px;">另存為新項目</button>
+            <div id="btn-f-cancel" class="hidden" style="text-align:center; margin-top:10px; font-size:12px; color:var(--ym-text-muted); cursor:pointer;">取消編輯</div>
         </div>
 
-        <div style="padding:15px; font-size:10px; color:#ddd; text-align:center; background:#fafafa;">v4.11.0 (Data ID Calibrated)</div>
-    </div> <!-- #oa-side-panel -->
+        <!-- ===== Footer ===== -->
+        <div style="padding:8px; text-align:center; font-size:10px; color:#c0c0cc; background:#fff; border-top:1px solid var(--ym-border); letter-spacing:0.5px; flex-shrink:0;">v4.12.0</div>
+
+    </div><!-- #oa-side-panel -->
 
     <script src="popup.js"></script>
 </body>
