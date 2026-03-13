@@ -1,5 +1,5 @@
 /**
- * Version: 4.12.1 - Real-time UX Sync
+ * Version: 4.12.4 - Browser Field UI Fix
  * 與懸浮面板 100% 統一版本的 popup.js
  */
 

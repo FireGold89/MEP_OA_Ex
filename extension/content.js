@@ -1,5 +1,5 @@
 /**
- * Version: 4.12.2 - Validation Event Fix
+ * Version: 4.12.4 - Browser Field UI Fix
  * 採購立項自動化工具 - 核心邏輯
  */
 
@@ -312,7 +312,7 @@
                 </div>
             </div>
 
-            <div style="padding:8px; text-align:center; font-size:10px; color:#c0c0cc; background:#fff; border-top:1px solid var(--ym-border); letter-spacing:0.5px; flex-shrink:0;">v4.12.1</div>
+            <div style="padding:8px; text-align:center; font-size:10px; color:#c0c0cc; background:#fff; border-top:1px solid var(--ym-border); letter-spacing:0.5px; flex-shrink:0;">v4.12.4</div>
         `;
         document.body.appendChild(panel);
         bindEvents();

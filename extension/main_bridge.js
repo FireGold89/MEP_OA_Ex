@@ -1,12 +1,12 @@
 /**
  * Weaver OA Main Bridge
- * Version: 4.12.3 - Global Validation Fix
+ * Version: 4.12.4 - Browser Field UI Fix
  * 核心功能：全自動增減行 + 強化版人員選取器 + 跨 Iframe 廣播轉發
  */
 
 (function () {
     const isTop = (window.self === window.top);
-    console.log(`%cOA Bridge v4.12.3: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
+    console.log(`%cOA Bridge v4.12.4: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
 
     // 全球暫存，供人員選擇器自動匹配
     window.__OA_LAST_PROJECT = window.__OA_LAST_PROJECT || null;
@@ -228,6 +228,16 @@
             if (elShow) elShow.value = finalVal;
         }
 
+        // 🌟 額外保險與 OA 特有驗證 (需在手動填充 span 之前執行，避免覆蓋顯示)
+        try {
+            if (window.checkinput2 && typeof window.checkinput2 === 'function') {
+                const spanId = id + 'span';
+                const viewType = el.getAttribute('viewtype') || '1';
+                window.checkinput2(id, spanId, viewType);
+            }
+            if (window.onsh && typeof window.onsh === 'function') window.onsh(el);
+        } catch (e) {}
+
         if (isBrowser) {
             const displayVal = val || "";
             const spans = [id + 'span', id + '_span'];
@@ -248,25 +258,10 @@
             el.dispatchEvent(ev);
         });
 
-        // 🌟 額外保險：直接執行內聯事件與 OA 特有驗證，這對消除紅色嘆號至關重要
         try {
-            // 1. 下拉選單處理邏輯
-            if (window.onsh && typeof window.onsh === 'function') window.onsh(el);
-            
-            // 2. 觸發標準內聯事件
             if (el.onchange && typeof el.onchange === 'function') el.onchange();
             if (el.onblur && typeof el.onblur === 'function') el.onblur();
-            
-            // 3. 核心修復：OA 專屬 checkinput2 驗證 (常用於消除紅色嘆號)
-            // 參數通常為：fieldId, spanId, viewType
-            if (window.checkinput2 && typeof window.checkinput2 === 'function') {
-                const spanId = id + 'span';
-                const viewType = el.getAttribute('viewtype') || '1'; // '1' 通常表示必填
-                window.checkinput2(id, spanId, viewType);
-            }
-        } catch (e) {
-            console.warn(`OA Bridge: Validation trigger failed for ${id}`, e);
-        }
+        } catch (e) {}
     }
 
     function clearAllFields() {
