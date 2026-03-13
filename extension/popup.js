@@ -125,11 +125,14 @@ document.addEventListener('DOMContentLoaded', async function () {
             const b = new Blob(["\uFEFF" + h.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8' });
             const url = URL.createObjectURL(b);
 
-            // 使用 chrome.downloads API 替代直接 click() 在 popup 中更穩健
+            // 使用固定檔名，每次匯出都覆蓋同一個檔案
             chrome.downloads.download({
                 url: url,
-                filename: `OA_Projects_${Date.now()}.csv`,
-                saveAs: true
+                filename: 'OA_Projects.csv',
+                conflictAction: 'overwrite',
+                saveAs: false
+            }, (downloadId) => {
+                URL.revokeObjectURL(url);
             });
         }
 

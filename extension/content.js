@@ -1,6 +1,6 @@
 /**
  * Weaver OA Persistent Floating Bubble (YouMind Style)
- * Version: 4.11.4 - List Item Display Enhancement
+ * Version: 4.11.5 - Fixed Export Filename
  */
 
 (function () {
@@ -224,7 +224,7 @@
                 <p style="font-size:12px; color:#86868b; margin:20px 24px;">開啟後可通過點及球體切換面板，並支持高級吸附動效。</p>
             </div>
 
-            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.4</div>
+            <div style="position:absolute; bottom:0; left:0; right:0; padding:12px; text-align:center; font-size:11px; color:#ccc; background:#fff; border-top:1px solid var(--ym-border);">v4.11.5</div>
         `;
         document.body.appendChild(panel);
         bindEvents();
@@ -373,8 +373,21 @@
                 rows.push(row.map(v => `"${(String(v || '')).replace(/"/g, '""')}"`).join(","));
             });
         });
-        const b = new Blob(["\uFEFF" + h.join(",") + "\n" + rows.join("\n")], { type: 'text/csv;charset=utf-8' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `OA_Data_${Date.now()}.csv`; a.click();
+        const csvContent = "\uFEFF" + h.join(",") + "\n" + rows.join("\n");
+        const b = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(b);
+        // 使用固定檔名，每次匹出都覆蓋同一個檔案
+        chrome.downloads.download({
+            url: url,
+            filename: 'OA_Projects.csv',
+            conflictAction: 'overwrite',
+            saveAs: false
+        }, (downloadId) => {
+            URL.revokeObjectURL(url);
+            if (chrome.runtime.lastError) {
+                console.warn('Download error:', chrome.runtime.lastError.message);
+            }
+        });
     }
 
     function bindEvents() {
