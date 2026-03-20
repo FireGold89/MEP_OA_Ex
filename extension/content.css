@@ -429,8 +429,8 @@
     position: fixed;
     right: 24px;
     bottom: 24px;
-    width: 60px;
-    height: 60px;
+    width: 48px;
+    height: 48px;
     z-index: 100001;
     display: flex;
     align-items: center;
@@ -439,23 +439,41 @@
 }
 
 .oa-ball-main {
-    width: 52px;
-    height: 52px;
+    width: 40px;
+    height: 40px;
     background: linear-gradient(135deg, #1d1d28 0%, #13131a 100%);
-    border-radius: 26px;
+    border-radius: 50%;
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 900;
-    font-size: 16px;
-    box-shadow: 0 8px 28px rgba(0,0,0,0.3), 0 2px 8px rgba(0,0,0,0.15);
+    font-size: 14px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.3);
     cursor: grab;
     transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
     pointer-events: auto;
     position: relative;
     overflow: hidden;
     border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ===== OA Icon Design: O outer, A inner ===== */
+.oa-icon-o {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.oa-icon-a {
+    font-size: 10px;
+    font-family: -apple-system, sans-serif;
+    transform: translateY(-1px);
 }
 
 .oa-ball-main::after {
@@ -500,4 +518,13 @@
 
 @media (max-width: 420px) {
     #oa-side-panel { width: calc(100vw - 16px); right: 8px; }
+}
+
+/* ===== Print Styles: Hide all extension UI when printing ===== */
+@media print {
+    #oa-float-ball,
+    #oa-side-panel,
+    #oa-export-modal {
+        display: none !important;
+    }
 }

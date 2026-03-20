@@ -171,6 +171,22 @@
             fillField(`field1366288_${i}`, row.detailCurrency);
             fillField(`field1366289_${i}`, row.amount);
         }
+
+        // 自動設置邀請公司數量 (field1366290)
+        fillField('field1366290', requiredCount);
+
+        // 🌟 新增：第一個承判商同步至立項預算/合約金額/中標公司
+        if (requiredCount > 0) {
+            const firstVendor = details[0].vendorName;
+            const firstAmount = details[0].amount;
+            
+            // 中標公司 ID=field1366313
+            fillField('field1366313', firstVendor);
+            
+            // 立項預算 ID=field1366280, 合約金額 ID=field1366294
+            fillField('field1366280', firstAmount);
+            fillField('field1366294', firstAmount);
+        }
         
         // 刪除多餘行
         let excessIdx = requiredCount;
@@ -197,7 +213,7 @@
         const isBrowser = (id === 'field1366309') || el.classList.contains('e8_browser') || !!document.getElementById(id + 'span');
 
         if (el.tagName === 'SELECT') {
-            let ok = "";
+            let matchedValue = null;
             const valStr = String(val).trim();
             const optionsInfo = Array.from(el.options).map(o => `[val:${o.value}, txt:${o.text.trim()}]`).join(", ");
             console.log(`OA Bridge: [SELECT] Fill ${id} with "${valStr}". Options: ${optionsInfo}`);
@@ -208,17 +224,20 @@
                 
                 // 擴大匹配範圍：值相符、文字相符、或關鍵字包含
                 if (optVal === valStr || optText === valStr || (valStr.length > 0 && optText.includes(valStr)) || (optVal.length > 0 && valStr.includes(optVal))) {
-                    ok = o.value; 
-                    console.log(`OA Bridge: [SELECT] Match Found! -> "${optText}" (Value: ${ok})`);
+                    matchedValue = o.value; 
+                    console.log(`OA Bridge: [SELECT] Match Found! -> "${optText}" (Value: ${matchedValue})`);
                     break; 
                 }
             }
-            if (ok !== "") {
-                el.value = ok;
+            if (matchedValue !== null) {
+                el.value = matchedValue;
                 // 觸發 OA 內部邏輯
                 try { if (window.onsh && typeof window.onsh === 'function') window.onsh(el); } catch(e){}
             } else {
-                console.warn(`OA Bridge: [SELECT] No match for "${valStr}" in field ${id}`);
+                // 如果輸入值為空且沒找到匹配選項，通常視為不填寫即可，不警告
+                if (valStr !== "") {
+                    console.warn(`OA Bridge: [SELECT] No match for "${valStr}" in field ${id}`);
+                }
                 return false;
             }
         } else {

@@ -109,7 +109,7 @@
         panel.innerHTML = `
             <div class="ym-header">
                 <div class="ym-header-left" style="display:flex; align-items:center; gap:10px;">
-                    <div class="ym-logo">un</div>
+                    <div class="ym-logo"><div class="oa-icon-o"><span class="oa-icon-a">A</span></div></div>
                     <div>
                         <div class="ym-header-title">採購一鍵通</div>
                         <div class="ym-header-subtitle">OA 表單自動化工具</div>
@@ -322,7 +322,7 @@
         if (document.getElementById('oa-float-ball')) return;
         ball = document.createElement('div');
         ball.id = 'oa-float-ball';
-        ball.innerHTML = `<div class="oa-ball-main"><span>un</span></div>`;
+        ball.innerHTML = `<div class="oa-ball-main"><div class="oa-icon-o"><span class="oa-icon-a">A</span></div></div>`;
         document.body.appendChild(ball);
 
         const main = ball.querySelector('.oa-ball-main');
@@ -403,7 +403,7 @@
         const div = document.createElement('div');
         div.className = 'oa-detail-row';
         div.innerHTML = `
-            <div style="position:absolute; right:10px; top:10px; cursor:pointer; color:#ccc; font-size:18px; font-weight:700;" onclick="this.parentElement.remove()">✕</div>
+            <div style="position:absolute; right:10px; top:10px; cursor:pointer; color:#ccc; font-size:18px; font-weight:700;" class="dt-remove">✕</div>
             <div class="oa-p-group"><label>承判商</label><input type="text" class="dt-vendor" value="${data.vendorName || ''}"></div>
             <div class="oa-p-group"><label>報價內容</label><input type="text" class="dt-content" value="${data.content || ''}"></div>
             <div class="oa-grid-row">
@@ -420,6 +420,49 @@
             </div>
         `;
         container.appendChild(div);
+
+        // 自動更新邀請公司數量
+        const updateInviteCount = () => {
+            const count = container.querySelectorAll('.oa-detail-row').length;
+            const inviteInput = document.getElementById('in-f-inviteCount');
+            if (inviteInput) inviteInput.value = count;
+        };
+
+        div.querySelector('.dt-remove').onclick = () => {
+            div.remove();
+            updateInviteCount();
+        };
+
+        updateInviteCount();
+
+        // 🌟 新增：第一行同步邏輯 (立項預算/合約金額/中標公司)
+        const rows = container.querySelectorAll('.oa-detail-row');
+        if (rows.length === 1) {
+            const vInput = div.querySelector('.dt-vendor');
+            const aInput = div.querySelector('.dt-amount');
+
+            const syncFirstRow = () => {
+                const firstRow = container.querySelector('.oa-detail-row');
+                if (!firstRow) return;
+                
+                const vendor = firstRow.querySelector('.dt-vendor').value.trim();
+                const amount = firstRow.querySelector('.dt-amount').value.trim();
+                
+                const winnerInput = document.getElementById('in-f-winnerName');
+                const budgetInput = document.getElementById('in-f-budget');
+                const contractAmountInput = document.getElementById('in-f-contractAmount');
+
+                if (winnerInput) winnerInput.value = vendor;
+                if (budgetInput) budgetInput.value = amount;
+                if (contractAmountInput) contractAmountInput.value = amount;
+            };
+
+            vInput.addEventListener('input', syncFirstRow);
+            aInput.addEventListener('input', syncFirstRow);
+            
+            // 初始同步一次 (如果是從編輯加載)
+            syncFirstRow();
+        }
     }
 
     function resetForm() {

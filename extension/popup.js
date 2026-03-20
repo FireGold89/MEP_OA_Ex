@@ -183,11 +183,21 @@ document.addEventListener('DOMContentLoaded', async function () {
         document.getElementById('btn-add-detail').onclick = () => addDetailRow();
 
         function buildCsvDataUrl() {
+            const buyTypeMap = {
+                "9": "保養維修材料",
+                "10": "保養合約分判",
+                "11": "工程材料",
+                "12": "分判工程",
+                "14": "後加工程",
+                "4": "固定資產",
+                "13": "其他"
+            };
             const h = ["項目標題", "物業名稱", "報價編號", "項目經理", "項目內容", "立項預算", "合約總價", "報價形式", "採購類別", "幣種", "承判商", "報價內容", "明細幣種", "金額", "邀請公司", "有效報價", "推荐理由", "中標公司", "合約幣種", "合約金額"];
             const rows = [];
             projects.forEach(p => {
+                const buyTypeText = buyTypeMap[p.buyType] || p.buyType || "";
                 (p.details || [{}]).forEach(dt => {
-                    const row = [p.label, p.propertyName, p.reportNo, p.manager, p.projectContent, p.budget, p.total, p.quoteType, p.buyType, p.currency, dt.vendorName, dt.content, dt.detailCurrency, dt.amount, p.inviteCount, p.replyCount, p.reason, p.winnerName, p.contractCurrency, p.contractAmount];
+                    const row = [p.label, p.propertyName, p.reportNo, p.manager, p.projectContent, p.budget, p.total, p.quoteType, buyTypeText, p.currency, dt.vendorName, dt.content, dt.detailCurrency, dt.amount, p.inviteCount, p.replyCount, p.reason, p.winnerName, p.contractCurrency, p.contractAmount];
                     rows.push(row.map(v => `"${(String(v || '')).replace(/"/g, '""')}"`).join(","));
                 });
             });
