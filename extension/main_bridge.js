@@ -153,23 +153,42 @@
 
     async function handleDetails(details) {
         const requiredCount = details.length;
+
+        // 獲取當前頁面中明細表所有可用的行索引
+        const getAvailableIndices = () => {
+            const indices = [];
+            document.querySelectorAll('input[id^="field1366286_"]').forEach(el => {
+                const match = el.id.match(/^field1366286_(\d+)$/);
+                if (match) indices.push(parseInt(match[1], 10));
+            });
+            return indices.sort((a,b) => a-b);
+        };
+
+        let currentIndices = getAvailableIndices();
+
+        // 如果當前行數不足，則點擊新增按鈕直到行數足夠
+        while (currentIndices.length < requiredCount) {
+             const addBtn = findActionBtnAcrossFrames(window.top, 'add');
+             if (addBtn) {
+                 addBtn.click();
+                 // 等待新行生成 (首次新增可能需要比較長的時間加載元件)
+                 await new Promise(r => setTimeout(r, currentIndices.length === 1 ? 1200 : 800));
+                 currentIndices = getAvailableIndices();
+             } else {
+                 console.warn("OA Bridge: Add button not found, forced to stop adding rows.");
+                 break;
+             }
+        }
+
+        // 填充資料到對應存在的行索引中
         for (let i = 0; i < requiredCount; i++) {
-            const rowId = `field1366286_${i}`;
-            let targetEl = document.getElementById(rowId);
-            
-            if ((!targetEl || targetEl.tagName !== 'INPUT') && i > 0) {
-                const addBtn = findActionBtnAcrossFrames(window.top, 'add');
-                if (addBtn) {
-                    addBtn.click();
-                    await new Promise(r => setTimeout(r, i === 1 ? 1200 : 800));
-                    targetEl = document.getElementById(rowId);
-                }
-            }
+            if (i >= currentIndices.length) break;
+            const rowIdx = currentIndices[i];
             const row = details[i];
-            fillField(`field1366286_${i}`, row.vendorName);
-            fillField(`field1366287_${i}`, row.content);
-            fillField(`field1366288_${i}`, row.detailCurrency);
-            fillField(`field1366289_${i}`, row.amount);
+            fillField(`field1366286_${rowIdx}`, row.vendorName);
+            fillField(`field1366287_${rowIdx}`, row.content);
+            fillField(`field1366288_${rowIdx}`, row.detailCurrency);
+            fillField(`field1366289_${rowIdx}`, row.amount);
         }
 
         // 自動設置邀請公司數量 (field1366290)
@@ -188,15 +207,14 @@
             fillField('field1366294', firstAmount);
         }
         
-        // 刪除多餘行
-        let excessIdx = requiredCount;
+        // 刪除多餘行 (把超出的行勾選後點擊刪除)
         let hasExcess = false;
-        while (document.getElementById(`field1366286_${excessIdx}`)) {
+        for (let i = requiredCount; i < currentIndices.length; i++) {
+            const excessIdx = currentIndices[i];
             const chk = findCheckboxForRow(excessIdx);
             if (chk) { if (!chk.checked) chk.click(); hasExcess = true; }
-            excessIdx++;
-            if (excessIdx > 50) break;
         }
+
         if (hasExcess) {
             const delBtn = findActionBtnAcrossFrames(window.top, 'del');
             if (delBtn) {
