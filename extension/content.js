@@ -243,26 +243,6 @@
             </div>
 
             <div id="view-v-settings" class="oa-panel-body hidden">
-                <style>
-                    .s-row { display:flex; align-items:center; justify-content:space-between; padding:13px 0; border-bottom:1px solid var(--ym-border); }
-                    .s-row:last-child { border-bottom:none; }
-                    .s-label { font-size:13px; font-weight:600; color:var(--ym-text-main); }
-                    .s-desc { font-size:11px; color:var(--ym-text-muted); margin-top:2px; }
-                    .s-section { font-size:10px; font-weight:800; color:var(--ym-text-muted); text-transform:uppercase; letter-spacing:0.8px; margin:14px 0 4px; }
-                    .oa-toggle { position:relative; width:44px; height:26px; cursor:pointer; flex-shrink:0; }
-                    .oa-toggle input { opacity:0; width:0; height:0; }
-                    .oa-toggle-track { position:absolute; inset:0; background:#d0d0da; border-radius:13px; transition:background 0.25s; }
-                    .oa-toggle input:checked + .oa-toggle-track { background:var(--ym-primary); }
-                    .oa-toggle-thumb { position:absolute; top:3px; left:3px; width:20px; height:20px; background:#fff; border-radius:50%; transition:transform 0.25s; box-shadow:0 1px 4px rgba(0,0,0,0.2); }
-                    .oa-toggle input:checked ~ .oa-toggle-thumb { transform:translateX(18px); }
-                    .oa-seg-ctrl { display:flex; background:#e8e8f0; border-radius:10px; padding:3px; gap:2px; }
-                    .oa-seg-btn { padding:5px 9px; border-radius:7px; border:none; background:transparent; font-size:11px; font-weight:600; color:var(--ym-text-muted); cursor:pointer; transition:all 0.2s; }
-                    .oa-seg-btn.active { background:#fff; color:var(--ym-primary); box-shadow:0 1px 4px rgba(0,0,0,0.1); }
-                    .oa-slider { -webkit-appearance:none; width:100px; height:4px; background:#d0d0da; border-radius:2px; outline:none; }
-                    .oa-slider::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:var(--ym-primary); cursor:pointer; }
-                    .oa-slider-val { font-size:12px; font-weight:700; color:var(--ym-primary); min-width:28px; text-align:right; }
-                </style>
-
                 <div class="s-section">🎨 顯示偏好</div>
 
                 <div class="s-row">
