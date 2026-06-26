@@ -205,6 +205,7 @@ function projectToFields(p, allowedFields) {
     if (p.projectContent) all['項目內容'] = p.projectContent;
     if (p.buyType) all['採購類別'] = BUY_TYPE_MAP[p.buyType] || p.buyType;
     if (p.budget) all['立項預算'] = parseFloat(p.budget) || 0;
+    else if (p.contractAmount) all['立項預算'] = parseFloat(p.contractAmount) || 0;
     if (p.contractAmount) all['合約金額'] = parseFloat(p.contractAmount) || 0;
     if (p.currency != null) all['幣種'] = CURRENCY_MAP[p.currency] || 'HKD';
     if (p.quoteType) all['報價形式'] = p.quoteType;

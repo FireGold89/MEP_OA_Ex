@@ -48,6 +48,25 @@ document.addEventListener('DOMContentLoaded', async function () {
         return fullPfx + String(maxSeq + 1).padStart(3, '0');
     }
 
+    function resolveBudget(project) {
+        const budget = (project.budget || '').trim();
+        if (budget) return budget;
+        return (project.contractAmount || '').trim();
+    }
+
+    function bindBudgetContractLink() {
+        const budgetInput = inputs.budget;
+        const contractInput = inputs.contractAmount;
+        if (!budgetInput || !contractInput) return;
+        const syncBudgetFromContract = () => {
+            if (!budgetInput.value.trim() && contractInput.value.trim()) {
+                budgetInput.value = contractInput.value.trim();
+            }
+        };
+        contractInput.addEventListener('input', syncBudgetFromContract);
+        contractInput.addEventListener('blur', syncBudgetFromContract);
+    }
+
     const tabFill = document.getElementById('tab-v-fill'), tabManage = document.getElementById('tab-v-manage');
     const viewFill = document.getElementById('view-v-fill'), viewManage = document.getElementById('view-v-manage');
 
@@ -64,6 +83,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             }
         });
         bindEvents();
+        bindBudgetContractLink();
         initSearch();
         syncData();
     }
@@ -114,6 +134,27 @@ document.addEventListener('DOMContentLoaded', async function () {
         div.querySelector('.dt-amount').addEventListener('blur', function () {
             if (this.value && !isNaN(this.value)) this.value = parseFloat(this.value).toFixed(2);
         });
+
+        const rows = container.querySelectorAll('.oa-detail-row');
+        if (rows.length === 1) {
+            const vInput = div.querySelector('.dt-vendor');
+            const aInput = div.querySelector('.dt-amount');
+            const syncFirstRow = () => {
+                const firstRow = container.querySelector('.oa-detail-row');
+                if (!firstRow) return;
+                const vendor = firstRow.querySelector('.dt-vendor').value.trim();
+                const amount = firstRow.querySelector('.dt-amount').value.trim();
+                const winnerInput = document.getElementById('in-f-winnerName');
+                const budgetInput = document.getElementById('in-f-budget');
+                const contractInput = document.getElementById('in-f-contractAmount');
+                if (winnerInput) winnerInput.value = vendor;
+                if (contractInput) contractInput.value = amount;
+                if (budgetInput && !budgetInput.value.trim()) budgetInput.value = amount;
+            };
+            vInput.addEventListener('input', syncFirstRow);
+            aInput.addEventListener('input', syncFirstRow);
+            syncFirstRow();
+        }
     }
 
     function bindEvents() {
@@ -528,6 +569,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 });
             });
             if (!p.label || p.details.length === 0) return alert("必填項缺失！");
+            if (!p.budget && p.contractAmount) p.budget = p.contractAmount;
             const idx = projects.findIndex(x => x && x.id === id);
             if (idx > -1) {
                 // 更新現有項目：保留原 createdAt 和 projectId，更新 updatedAt
@@ -564,6 +606,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 });
             });
             if (!p.label || p.details.length === 0) return alert("必填項缺失！");
+            if (!p.budget && p.contractAmount) p.budget = p.contractAmount;
             projects.push(p);
             p.projectId = generateProjectId(p.buyType, p.reportNo, p.createdAt, projects);
             await chrome.storage.local.set({ 'oa_projects_v13': projects });
@@ -769,11 +812,12 @@ document.addEventListener('DOMContentLoaded', async function () {
             // 構建副標題內容
             let subContent = "";
             if (subMode === 'both') {
-                subContent = `${p.reportNo || '--'}${p.budget ? '　$ ' + p.budget : ''}`;
+                subContent = `${p.reportNo || '--'}${(p.budget || p.contractAmount) ? '　$ ' + (p.budget || p.contractAmount) : ''}`;
             } else if (subMode === 'reportNo') {
                 subContent = p.reportNo || '--';
             } else if (subMode === 'budget') {
-                subContent = p.budget ? '$ ' + p.budget : '--';
+                const budgetDisplay = p.budget || p.contractAmount;
+                subContent = budgetDisplay ? '$ ' + budgetDisplay : '--';
             }
 
             // 構建日期時間行（獨立第三行）
@@ -886,8 +930,14 @@ document.addEventListener('DOMContentLoaded', async function () {
         // 故在此簡化備份為直接重置
         lastBackup = null;
 
-        const msg = { type: "OA_LINK_FILL", project: JSON.parse(JSON.stringify(p)) };
+        const msg = { type: "OA_LINK_FILL", project: normalizeForFill(p) };
         sendMessageToActiveTab(msg);
+    }
+
+    function normalizeForFill(p) {
+        const np = JSON.parse(JSON.stringify(p));
+        np.budget = resolveBudget(np);
+        return np;
     }
 
     function resetForm() {

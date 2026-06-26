@@ -194,17 +194,15 @@
         // 自動設置邀請公司數量 (field1366290)
         fillField('field1366290', requiredCount);
 
-        // 🌟 新增：第一個承判商同步至立項預算/合約金額/中標公司
+        // 第一個承判商同步至中標公司、合約金額；預算可獨立填寫，未填則與合約金額相同
         if (requiredCount > 0) {
             const firstVendor = details[0].vendorName;
             const firstAmount = details[0].amount;
-            
-            // 中標公司 ID=field1366313
+            const budgetVal = (project.budget && String(project.budget).trim()) ? project.budget : firstAmount;
+
             fillField('field1366313', firstVendor);
-            
-            // 立項預算 ID=field1366280, 合約金額 ID=field1366294
-            fillField('field1366280', firstAmount);
             fillField('field1366294', firstAmount);
+            fillField('field1366280', budgetVal);
         }
         
         // 刪除多餘行 (把超出的行勾選後點擊刪除)

@@ -136,11 +136,19 @@
         });
     }
 
+    function resolveBudget(project) {
+        const budget = (project.budget || '').trim();
+        if (budget) return budget;
+        return (project.contractAmount || '').trim();
+    }
+
     function normalizeProjectData(p) {
         const np = JSON.parse(JSON.stringify(p));
         // 確保發送給 Bridge 的是數值 ID
         if (np.quoteType && isNaN(np.quoteType)) np.quoteType = quoteMap[np.quoteType] || np.quoteType;
         if (np.buyType && isNaN(np.buyType)) np.buyType = buyMap[np.buyType] || np.buyType;
+        // 立項預算可獨立填寫；未輸入時與合約金額相同
+        np.budget = resolveBudget(np);
         return np;
     }
 
@@ -494,7 +502,7 @@
 
         updateInviteCount();
 
-        // 🌟 新增：第一行同步邏輯 (立項預算/合約金額/中標公司)
+        // 第一行明細同步：中標公司、合約金額；預算僅在未手動輸入時跟隨合約金額
         const rows = container.querySelectorAll('.oa-detail-row');
         if (rows.length === 1) {
             const vInput = div.querySelector('.dt-vendor');
@@ -512,14 +520,13 @@
                 const contractAmountInput = document.getElementById('in-f-contractAmount');
 
                 if (winnerInput) winnerInput.value = vendor;
-                if (budgetInput) budgetInput.value = amount;
                 if (contractAmountInput) contractAmountInput.value = amount;
+                if (budgetInput && !budgetInput.value.trim()) budgetInput.value = amount;
             };
 
             vInput.addEventListener('input', syncFirstRow);
             aInput.addEventListener('input', syncFirstRow);
 
-            // 初始同步一次 (如果是從編輯加載)
             syncFirstRow();
         }
     }
@@ -705,7 +712,21 @@
         };
     }
 
+    function bindBudgetContractLink() {
+        const budgetInput = document.getElementById('in-f-budget');
+        const contractInput = document.getElementById('in-f-contractAmount');
+        if (!budgetInput || !contractInput) return;
+        const syncBudgetFromContract = () => {
+            if (!budgetInput.value.trim() && contractInput.value.trim()) {
+                budgetInput.value = contractInput.value.trim();
+            }
+        };
+        contractInput.addEventListener('input', syncBudgetFromContract);
+        contractInput.addEventListener('blur', syncBudgetFromContract);
+    }
+
     function bindEvents() {
+        bindBudgetContractLink();
         document.getElementById('oa-btn-refresh').onclick = syncData;
         document.getElementById('oa-panel-close').onclick = () => {
             panel.classList.remove('open');
@@ -1016,6 +1037,7 @@
                 });
             });
             if (!p.label || p.details.length === 0) return alert("請輸入標題並添加至少一項明細");
+            if (!p.budget && p.contractAmount) p.budget = p.contractAmount;
 
             // 🌟 獲取最新狀態防止覆寫
             const currentRes = await chrome.storage.local.get(['oa_projects_v13']);
@@ -1180,11 +1202,12 @@
             // 構建副標題內容
             let subContent = "";
             if (subMode === 'both') {
-                subContent = `${p.reportNo || '--'}${p.budget ? '　$ ' + p.budget : ''}`;
+                subContent = `${p.reportNo || '--'}${(p.budget || p.contractAmount) ? '　$ ' + (p.budget || p.contractAmount) : ''}`;
             } else if (subMode === 'reportNo') {
                 subContent = p.reportNo || '--';
             } else if (subMode === 'budget') {
-                subContent = p.budget ? '$ ' + p.budget : '--';
+                const budgetDisplay = p.budget || p.contractAmount;
+                subContent = budgetDisplay ? '$ ' + budgetDisplay : '--';
             }
 
             // 構建日期時間行
