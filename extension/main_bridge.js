@@ -1,12 +1,12 @@
 /**
  * Weaver OA Main Bridge
- * Version: 4.12.4 - Browser Field UI Fix
+ * Version: 4.13.1 - 版號與 manifest 對齊；僅由 manifest MAIN world 載入（勿重複注入）
  * 核心功能：全自動增減行 + 強化版人員選取器 + 跨 Iframe 廣播轉發
  */
 
 (function () {
     const isTop = (window.self === window.top);
-    console.log(`%cOA Bridge v4.12.4: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
+    console.log(`%cOA Bridge v4.13.1: Active [${isTop ? 'TOP' : 'IFRAME'}]`, "color:white; background:#764ba2; padding:2px 5px; border-radius:3px;");
 
     // 全球暫存，供人員選擇器自動匹配
     window.__OA_LAST_PROJECT = window.__OA_LAST_PROJECT || null;

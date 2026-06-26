@@ -39,7 +39,7 @@
     position: fixed;
     top: 16px;
     right: 16px;
-    width: 372px;
+    width: 408px;
     height: 90vh;
     max-height: 820px;
     background: var(--ym-panel-bg);
@@ -51,7 +51,7 @@
     flex-direction: column;
     overflow: hidden;
     transition: transform 0.45s var(--ym-curve), opacity 0.3s;
-    transform: translateX(420px);
+    transform: translateX(460px);
     opacity: 0;
     border: 1px solid var(--ym-border);
 }
@@ -126,16 +126,17 @@
 
 /* ===== Toolbar ===== */
 .oa-action-toolbar {
-    padding: 12px 16px;
+    padding: 8px 16px;
     display: flex;
-    gap: 8px;
+    gap: 6px;
     background: var(--ym-header-bg);
-    padding-bottom: 16px;
+    padding-bottom: 12px;
     flex-shrink: 0;
 }
 
 .oa-tool-btn {
     flex: 1;
+    min-width: 0;
     padding: 9px 6px;
     border-radius: 10px;
     border: none;
@@ -145,7 +146,10 @@
     transition: all 0.2s;
     background: rgba(255,255,255,0.1);
     color: rgba(255,255,255,0.75);
-    letter-spacing: 0.2px;
+    letter-spacing: 0;
+    white-space: nowrap;
+    line-height: 1.1;
+    text-align: center;
 }
 
 .oa-tool-btn:hover {
@@ -181,6 +185,8 @@
     gap: 4px;
     flex-shrink: 0;
     border-bottom: 1px solid var(--ym-border);
+    position: relative;
+    z-index: 10;
 }
 
 .oa-p-tab {
@@ -246,16 +252,102 @@
     background: var(--ym-primary-soft);
 }
 
+/* ===== Folder Styles ===== */
+.oa-folder {
+    background: var(--ym-card-bg);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    border: 1px solid var(--ym-border);
+    box-shadow: var(--ym-shadow-card);
+    overflow: hidden;
+    transition: all 0.3s var(--ym-curve);
+}
+
+.oa-folder-header {
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--ym-text-main);
+    background: #f9f9fc;
+    -webkit-user-select: none;
+    user-select: none;
+    transition: background 0.2s;
+}
+
+.oa-folder-header:hover {
+    background: #f3f3f8;
+}
+
+.oa-folder-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.oa-folder-count {
+    background: var(--ym-border);
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--ym-text-secondary);
+}
+
+.oa-folder-arrow {
+    font-size: 10px;
+    color: var(--ym-text-muted);
+    transition: transform 0.3s var(--ym-curve);
+}
+
+.oa-folder.open .oa-folder-arrow {
+    transform: rotate(180deg);
+}
+
+.oa-folder-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s var(--ym-curve), padding 0.4s var(--ym-curve);
+    padding: 0 10px;
+}
+
+.oa-folder.open .oa-folder-content {
+    max-height: 2000px;
+    padding: 10px;
+}
+
+.oa-folder .oa-p-item {
+    margin-bottom: 6px;
+    box-shadow: none;
+    border: 1px solid #e8e8f0;
+}
+.oa-folder .oa-p-item:last-child {
+    margin-bottom: 0;
+}
+
 /* ===== Project List Item ===== */
 .oa-p-item {
     background: var(--ym-card-bg);
-    border-radius: 14px;
-    padding: 14px 16px;
+    border-radius: 12px;
+    padding: 10px 14px;
     margin-bottom: 8px;
     cursor: pointer;
     transition: all 0.3s var(--ym-curve);
     box-shadow: var(--ym-shadow-card);
     border: 1px solid var(--ym-border);
+}
+
+.oa-p-item .edit-btn, 
+.oa-p-item .del-btn {
+    opacity: 0.6 !important;
+}
+
+.oa-p-item:hover .edit-btn, 
+.oa-p-item:hover .del-btn {
+    opacity: 1 !important;
 }
 
 .oa-p-item:hover {
@@ -318,8 +410,8 @@
     color: var(--ym-text-main) !important;
     box-sizing: border-box;
     cursor: pointer;
-    appearance: none !important;
     -webkit-appearance: none !important;
+    appearance: none !important;
     background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239898aa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
     background-repeat: no-repeat !important;
     background-position: right 12px center !important;
@@ -451,11 +543,18 @@
     font-size: 14px;
     box-shadow: 0 8px 20px rgba(0,0,0,0.3);
     cursor: grab;
-    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s;
+    transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.2s, opacity 0.3s ease, visibility 0.3s;
     pointer-events: auto;
     position: relative;
     overflow: hidden;
     border: 1px solid rgba(255,255,255,0.08);
+}
+
+.oa-ball-main.ball-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none !important;
+    transform: scale(0.6);
 }
 
 /* ===== OA Icon Design: O outer, A inner ===== */
@@ -513,7 +612,7 @@
 
 /* ===== Responsive ===== */
 @media (max-height: 750px) {
-    #oa-side-panel { height: 92vh; top: 10px; right: 10px; width: 340px; }
+    #oa-side-panel { height: 92vh; top: 10px; right: 10px; width: 376px; }
 }
 
 @media (max-width: 420px) {
