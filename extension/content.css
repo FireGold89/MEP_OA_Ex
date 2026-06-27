@@ -610,6 +610,44 @@
 /* ===== Utilities ===== */
 .hidden { display: none !important; }
 
+/* ===== Budget auto-fill toast ===== */
+.oa-budget-auto-toast {
+    position: absolute;
+    bottom: 52px;
+    left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s var(--ym-curve), transform 0.3s var(--ym-curve);
+    z-index: 100;
+    padding: 10px 14px;
+    border-radius: 12px;
+    background: rgba(17, 17, 24, 0.94);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+    max-width: calc(100% - 32px);
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.oa-budget-auto-toast strong {
+    font-weight: 700;
+    color: #a8b4ff;
+}
+
+.oa-budget-auto-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+body > .oa-budget-auto-toast {
+    position: fixed;
+    bottom: 20px;
+}
+
 /* ===== Responsive ===== */
 @media (max-height: 750px) {
     #oa-side-panel { height: 92vh; top: 10px; right: 10px; width: 376px; }

@@ -26,7 +26,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     // ===== 飛書同步 =====
     if (msg.type === 'FEISHU_SYNC') {
-        handleFeishuSync(msg.config, msg.projects)
+        handleFeishuSync(msg.config, msg.projects || [], msg.options || {})
             .then(result => sendResponse({ success: true, ...result }))
             .catch(err => sendResponse({ success: false, error: err.message }));
         return true; // 保持 channel 開放等待 async 回應

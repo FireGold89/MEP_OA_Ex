@@ -5,6 +5,7 @@
 
 document.addEventListener('DOMContentLoaded', async function () {
     let projects = [];
+    let budgetAutoFillTimer = null;
     const fields = ['label', 'propertyName', 'reportNo', 'manager', 'projectContent', 'budget', 'total', 'quoteType', 'buyType', 'currency', 'inviteCount', 'replyCount', 'reason', 'winnerName', 'contractCurrency', 'contractAmount'];
     const inputs = {};
     let lastBackup = null;
@@ -54,17 +55,80 @@ document.addEventListener('DOMContentLoaded', async function () {
         return (project.contractAmount || '').trim();
     }
 
+    function formatBudgetAmount(val) {
+        const n = parseFloat(val);
+        return !isNaN(n) ? n.toFixed(2) : val;
+    }
+
+    function showBudgetAutoFillToast(amount) {
+        let toast = document.querySelector('.oa-budget-auto-toast');
+        if (!toast) {
+            toast = document.createElement('div');
+            toast.className = 'oa-budget-auto-toast';
+            document.body.appendChild(toast);
+        }
+        toast.innerHTML = `💡 立項預算已自動填入合約金額：<strong>$ ${amount}</strong>`;
+        toast.classList.add('visible');
+        clearTimeout(toast._hideTimer);
+        toast._hideTimer = setTimeout(() => toast.classList.remove('visible'), 4000);
+    }
+
+    function cancelBudgetAutoFillTimer() {
+        if (budgetAutoFillTimer) {
+            clearTimeout(budgetAutoFillTimer);
+            budgetAutoFillTimer = null;
+        }
+    }
+
+    function applyBudgetAutoFill(showNotice = true) {
+        const budgetInput = inputs.budget;
+        const contractInput = inputs.contractAmount;
+        if (!budgetInput || !contractInput) return false;
+        if (budgetInput.value.trim()) return false;
+        const contractVal = contractInput.value.trim();
+        if (!contractVal) return false;
+        const filled = formatBudgetAmount(contractVal);
+        budgetInput.value = filled;
+        if (showNotice) showBudgetAutoFillToast(filled);
+        return true;
+    }
+
+    function scheduleBudgetAutoFill() {
+        cancelBudgetAutoFillTimer();
+        const budgetInput = inputs.budget;
+        const contractInput = inputs.contractAmount;
+        if (!budgetInput || !contractInput) return;
+        if (budgetInput.value.trim()) return;
+        if (!contractInput.value.trim()) return;
+        budgetAutoFillTimer = setTimeout(() => {
+            budgetAutoFillTimer = null;
+            applyBudgetAutoFill(true);
+        }, 3000);
+    }
+
     function bindBudgetContractLink() {
         const budgetInput = inputs.budget;
         const contractInput = inputs.contractAmount;
         if (!budgetInput || !contractInput) return;
-        const syncBudgetFromContract = () => {
-            if (!budgetInput.value.trim() && contractInput.value.trim()) {
-                budgetInput.value = contractInput.value.trim();
+
+        budgetInput.addEventListener('input', () => {
+            if (budgetInput.value.trim()) cancelBudgetAutoFillTimer();
+            else scheduleBudgetAutoFill();
+        });
+        budgetInput.addEventListener('blur', () => {
+            if (!budgetInput.value.trim()) scheduleBudgetAutoFill();
+            else {
+                cancelBudgetAutoFillTimer();
+                if (!isNaN(budgetInput.value)) budgetInput.value = parseFloat(budgetInput.value).toFixed(2);
             }
-        };
-        contractInput.addEventListener('input', syncBudgetFromContract);
-        contractInput.addEventListener('blur', syncBudgetFromContract);
+        });
+
+        contractInput.addEventListener('input', () => {
+            if (!budgetInput.value.trim()) scheduleBudgetAutoFill();
+        });
+        contractInput.addEventListener('blur', () => {
+            if (!budgetInput.value.trim()) scheduleBudgetAutoFill();
+        });
     }
 
     const tabFill = document.getElementById('tab-v-fill'), tabManage = document.getElementById('tab-v-manage');
@@ -149,7 +213,7 @@ document.addEventListener('DOMContentLoaded', async function () {
                 const contractInput = document.getElementById('in-f-contractAmount');
                 if (winnerInput) winnerInput.value = vendor;
                 if (contractInput) contractInput.value = amount;
-                if (budgetInput && !budgetInput.value.trim()) budgetInput.value = amount;
+                if (budgetInput && !budgetInput.value.trim()) scheduleBudgetAutoFill();
             };
             vInput.addEventListener('input', syncFirstRow);
             aInput.addEventListener('input', syncFirstRow);
@@ -390,35 +454,44 @@ document.addEventListener('DOMContentLoaded', async function () {
                     return;
                 }
 
-                if (projects.length === 0) {
-                    showFeishuStatus('error', '❌ 尚無項目資料可同步');
-                    return;
-                }
+                const isDownloadOnly = projects.length === 0;
 
                 feishuSyncBtn.disabled = true;
                 feishuSyncBtn.textContent = '⏳ 同步中...';
-                showFeishuStatus('loading', `🐦 正在連線飛書並同步 ${projects.length} 個項目，請稍候...`);
+                showFeishuStatus('loading', isDownloadOnly
+                    ? '🐦 本地無資料，正在從飛書下載...'
+                    : `🐦 正在連線飛書並同步 ${projects.length} 個項目，請稍候...`);
 
                 try {
                     const result = await new Promise((resolve, reject) => {
                         chrome.runtime.sendMessage(
-                            { type: 'FEISHU_SYNC', config: config, projects: projects },
+                            {
+                                type: 'FEISHU_SYNC',
+                                config: config,
+                                projects: projects,
+                                options: isDownloadOnly ? { downloadOnly: true } : {}
+                            },
                             (res) => {
                                 if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-                                else if (!res.success) reject(new Error(res.error || '未知錯誤'));
+                                else if (!res || !res.success) reject(new Error(res?.error || '未知錯誤'));
                                 else resolve(res);
                             }
                         );
                     });
-                    // 組合成功訊息
-                    let successHtml =
-                        `✅ <strong>同步成功</strong><br>` +
-                        `📥 新增：${result.created} 條` +
-                        `&emsp;✏️ 更新：${result.updated} 條` +
-                        `&emsp;📄 共計：${result.total} 條`;
 
-                    // 若有從飛書下載的新項目
-                    if (result.downloaded > 0) {
+                    if (isDownloadOnly && result.downloaded === 0) {
+                        showFeishuStatus('error', '❌ 飛書表格中亦無資料可下載');
+                        return;
+                    }
+
+                    let successHtml = isDownloadOnly
+                        ? `✅ <strong>下載成功</strong><br>📥 從飛書下載：${result.downloaded} 條（已存入本地）`
+                        : `✅ <strong>同步成功</strong><br>` +
+                            `📥 新增：${result.created} 條` +
+                            `&emsp;✏️ 更新：${result.updated} 條` +
+                            `&emsp;📄 共計：${result.total} 條`;
+
+                    if (!isDownloadOnly && result.downloaded > 0) {
                         successHtml += `<br>📥 從飛書下載：${result.downloaded} 條（新項目已合併到本地）`;
                     }
 
@@ -445,7 +518,9 @@ document.addEventListener('DOMContentLoaded', async function () {
 
                     // 如果有從飛書下載的新項目，自動合併到本地存儲
                     if (result.feishuProjects && result.feishuProjects.length > 0) {
-                        const mergedProjects = [...projects, ...result.feishuProjects];
+                        const mergedProjects = isDownloadOnly
+                            ? result.feishuProjects
+                            : [...projects, ...result.feishuProjects];
                         await chrome.storage.local.set({ 'oa_projects_v13': mergedProjects });
                         syncData(); // 重新讀取並渲染列表
                     }
@@ -941,6 +1016,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     }
 
     function resetForm() {
+        cancelBudgetAutoFillTimer();
         document.getElementById('in-f-id').value = ""; document.getElementById('in-f-managerId').value = "";
         fields.forEach(f => { if (inputs[f]) inputs[f].value = (f === 'currency' || f === 'contractCurrency') ? '0' : ''; });
         document.getElementById('oa-detail-list').innerHTML = ""; addDetailRow();
